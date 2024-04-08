@@ -42,14 +42,15 @@ RWE4.Maid:AddTask(settings().Studio.ThemeChanged:Connect(function()
 	 RWE4.ThemeChanged:Fire(theme)
 end))
 do
+	local titles = {};
 	RWE4.ModulesWindowData = DockWidgetPluginGuiInfo.new(
 		Enum.InitialDockState.Float,
 		false,
-		true,
-		350,
-		350,
-		300,
-		300
+		false,
+		400,
+		400,
+		400,
+		400
 	)
 	RWE4.ModuleWindow = Plugin:CreateDockWidgetPluginGui("RWE4_ModuleWindow", RWE4.ModulesWindowData)
 	RWE4.ModuleWindow.Title = "RWE4 [Main Menu]";
@@ -64,7 +65,7 @@ do
 
 		return ScrollWindow:GetContentsFrame()
 	end
-	createModuleFrame(RWE4.ModuleWindow)
+	local grid = createModuleFrame(RWE4.ModuleWindow)
 	RWE4:addButton("StartRWE4", "Start RWE4 (Editor)", "Sets up the editor (this plugin) for the first time, then opens the main menu.", "rbxassetid://2778270261")
 	RWE4:addClickHandler("StartRWE4", function()
 		print("[RWE4]: Starting RW Engine...")
