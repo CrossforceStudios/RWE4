@@ -71,8 +71,7 @@ do
 		print("[RWE4]: Starting RW Engine...")
 		for i, model in ipairs(script.Modules:GetChildren()) do
 			print(("[RWE4]: Initializing %s module..."):format(model.Name))
-	
-			local data = require(model)(RWE4,EditorLibraries,Libraries,loadLibraryFrom)
+			local data = require(model)(RWE4,Plugin,EditorLibraries,Libraries,loadLibraryFrom)
 			if data then
 				local button = SW.ImageButtonWithText.new(model.Name,
 					i,
