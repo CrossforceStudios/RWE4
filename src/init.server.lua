@@ -31,9 +31,16 @@ end
 function RWE4:addClickHandler(name, handler)
 	local b = RWE4.Buttons[name] 
 	if b then
-		b.Click:Connect(handler)
+		RWE4.Maid:AddTask(b.Click:Connect(handler))
 	end
 end
+function RWE4:CloneAsset(name)
+	local asset = script.CoreAssets:FindFirstChild(name)
+	if asset then
+		asset = asset:Clone()
+		return asset
+	end
+end;
 
 --- Themes
 RWE4.ThemeChanged = Signal.new()
@@ -71,7 +78,7 @@ do
 		print("[RWE4]: Starting RW Engine...")
 		for i, model in ipairs(script.Modules:GetChildren()) do
 			print(("[RWE4]: Initializing %s module..."):format(model.Name))
-			local data = require(model)(RWE4,Plugin,EditorLibraries,Libraries,loadLibraryFrom)
+			local data = require(model)(RWE4,Plugin,EditorLibraries,Libraries,loadLibraryFrom,script.EngineInstall)
 			if data then
 				local button = SW.ImageButtonWithText.new(model.Name,
 					i,

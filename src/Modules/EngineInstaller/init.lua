@@ -1,5 +1,5 @@
-return function(RWE4,Plugin,EditorLibraries,Libraries,loader)
-
+return function(RWE4,Plugin,EditorLibraries,Libraries,loader,EI)
+	local installRWE4 = require(script.installHelper)
 	local dwi = DockWidgetPluginGuiInfo.new(
 		Enum.InitialDockState.Float, -- Widget will be initialized in floating panel
 		false, -- Widget will be initially enabled
@@ -11,6 +11,11 @@ return function(RWE4,Plugin,EditorLibraries,Libraries,loader)
 	)
 	local installerUI = Plugin:CreateDockWidgetPluginGui("InstallerUI_RWE4", dwi)
 	installerUI.Title = "RWE4 Installer"
+	local window = RWE4:CloneAsset("InstallerWindow")
+	window.Parent = installerUI
+	RWE4.Maid:AddTask(window.InstallButton.Activated:Connect(function()
+		installRWE4(EI)
+	end))
     local function openInstaller()
 		installerUI.Enabled = true
     end
