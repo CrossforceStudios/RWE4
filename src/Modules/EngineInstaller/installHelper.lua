@@ -17,5 +17,22 @@ return function(ei)
 
     installService("ReplicatedStorage")
     installService("ServerStorage")
+    installService("ServerScriptService", function(obj)
+        if obj.Name == "Main" then
+            obj.Disabled  = false
+        end
+    end)
+    installService("StarterPlayer", function(obj)
+        if obj.Name == "StarterPlayerScr" then
+            for _, i in obj:GetChildren() do
+                local i2 = i:Clone()
+                if i2.Name == "Client" then
+                    i2.Disabled = false
+                end
+                i2.Parent = game.StarterPlayer.StarterPlayerScripts
+           end
+           obj:Destroy()
+        end
+    end)
 
 end
