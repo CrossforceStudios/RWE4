@@ -140,9 +140,15 @@ function CameraService:ShakeBump(desc, posInf, rotInf)
 		CameraService.CamShaker:Shake(effect)
 	end
 end
-function CameraService:ShakeVibration(desc)
+function CameraService:ShakeVibration(posInf, rotInf)
 	local effect = CameraService.CamShaker.Presets["Vibration"]
 	if effect then
+		if posInf then
+			effect.PositionInfluence = posInf
+		end
+		if rotInf then
+			effect.RotationInfluence = rotInf
+		end
 		CameraService.CamShaker:Shake(effect)
 	end
 end
