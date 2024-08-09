@@ -7,10 +7,18 @@ local player = Players.LocalPlayer
 Resources:SetupFlags({
 
 })
+local Character = nil;
+local CharacterParts = {};
+
+_G.CharacterStance = {};
 -- Necessary Modules
 local RemoteService = Resources:LoadLibrary("RemoteService")
 local CameraService = Resources:LoadLibrary("CameraService")
-CameraService:startClient()
+--CameraService:startClient()
 player.CharacterAdded:Connect(function(ch)
-    CameraService:setCamMode("FirstPerson", ch:WaitForChild("Head", 20))
+    Character = ch
+    CharacterParts.Head = ch:WaitForChild("Head", 20)
+    --CameraService:setCamMode("FirstPerson", CharacterParts.Head)
+    CharacterParts.ASM = Resources:LoadLibrary("AnimateHelper")(Character)
+
 end)
