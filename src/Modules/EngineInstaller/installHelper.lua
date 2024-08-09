@@ -33,6 +33,15 @@ return function(ei)
                 i2.Parent = game.StarterPlayer.StarterPlayerScripts
            end
            obj:Destroy()
+         elseif obj.Name == "StarterPlayerScr" then
+            for _, i in obj:GetChildren() do
+                local i2 = i:Clone()
+                if i2.Name == "Animate" then
+                    i2.Disabled = false
+                end
+                i2.Parent = game.StarterPlayer.StarterCharacterScripts
+           end
+           obj:Destroy()
         end
     end)
 
