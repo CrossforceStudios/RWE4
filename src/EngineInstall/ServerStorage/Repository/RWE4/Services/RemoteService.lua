@@ -454,7 +454,7 @@ network.bounceOthersTeamU = function(modelType,player,team,...)
 		end
 	end
 end
-network.filter = function(player,msgType,msg)
+network.filter = function(player,msgType,msg,lang,tfc)
 	if msg ~= "" then
 		if msgType == "Broadcast" then
 			-- Filter the incoming message and send the filtered message
@@ -463,7 +463,13 @@ network.filter = function(player,msgType,msg)
 			filteredText = getFilteredMessage(messageObject)
 			return filteredText
 		elseif msgType == "Private" then
-
+			
+		elseif msgType == "BroadcastTranslate" then
+			-- Filter the incoming message and send the filtered message
+			local messageObject = getTextObject(msg, player.UserId)
+			local filteredText = ""
+			filteredText = getFilteredMessageTranslated(messageObject, player.UserId, lang, tfc)
+			return filteredText
 		end
 	end
 end

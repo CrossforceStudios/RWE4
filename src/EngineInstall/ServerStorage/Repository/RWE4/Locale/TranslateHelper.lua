@@ -33,6 +33,15 @@ TranslationHelper.setSourceLocale = function(locale)
 	return false
 end
 
+TranslationHelper.getLanguageCodeFromLocale = function(localeId)
+	-- Get every match of not a "-"
+	local codeMatch = string.gmatch(localeId, "[^-]+")()
+	if codeMatch then
+		return codeMatch
+	else
+		return "en"
+	end
+end
 -- Translate function
 TranslationHelper.translate = function(text, object)
 	if not object then
