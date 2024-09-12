@@ -163,7 +163,8 @@ function SoundSystem:StartButtonClient(sound: Sound, soundMan)
 			else
 				sound.SoundId = "rbxassetid://9119720940"
 			end
-			SoundService:PlayLocalSound(sound)
+			sound.SoundGroup = SoundSystem:GetSoundCat("UI_FX")
+			sound:Play()
 		end)
 	end)
 	game.CollectionService:GetInstanceRemovedSignal("SoundBtn"):Connect(function(instance)
