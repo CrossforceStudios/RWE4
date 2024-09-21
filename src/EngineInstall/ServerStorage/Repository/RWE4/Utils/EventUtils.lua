@@ -16,4 +16,12 @@ function EventUtils:WaitEvent(eventName)
 	return Events[eventName]:Wait()
 end
 
+function EventUtils:FireEvent(eventName, ...)
+	 Events[eventName]:Fire(...)
+end
+
+function EventUtils:GetEvent(eventName)
+	return Events[eventName]
+end
+
 return EventUtils
