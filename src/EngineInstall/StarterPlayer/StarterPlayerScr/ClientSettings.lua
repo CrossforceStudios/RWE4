@@ -25,4 +25,7 @@ return {
 			{ id = "rbxassetid://182393478", weight = 10, priority = Enum.AnimationPriority.Idle; } 
 		},
 	};
+	Events = {
+		"MapReady";
+	};
 }

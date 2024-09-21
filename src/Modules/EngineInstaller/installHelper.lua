@@ -19,6 +19,7 @@ return function(ei)
     installService("ReplicatedStorage")
     installService("ServerStorage")
     installService("LocalizationService")
+    installService("SoundService")
     installService("ServerScriptService", function(obj)
         if obj.Name == "Main" then
             obj.Disabled  = false

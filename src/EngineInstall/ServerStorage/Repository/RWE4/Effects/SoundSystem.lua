@@ -2,7 +2,7 @@
 local RunService	= game:GetService("RunService")
 
 if not RunService:IsClient() then
-	error("Sound System 3D is to be run on the client. Use RemoteEvents to have the client create the sound.")
+	error("Sound System is to be run on the client. Use RemoteEvents to have the client create the sound.")
 end
 local Resources = require(game.ReplicatedStorage.Resources)
 local SoundService = game:GetService("SoundService")
@@ -10,6 +10,8 @@ local FastDelay = Resources:LoadLibrary("FastDelay")
 local Zone = Resources:LoadLibrary("Zone")
 local Tween = Resources:LoadLibrary("Tween")
 local fastSpawn = Resources:LoadLibrary("FastSpawn")
+local EventUtils = Resources:LoadLibrary("EventUtils")
+
 -- Localize maths for optimization
 local acos,cos,pi	= math.acos,math.cos,math.pi
 local v3,cf			= Vector3.new,CFrame.new
@@ -33,9 +35,9 @@ function SoundSystem:GetSoundCat(catName)
 end
 
 fastSpawn(function()
-	repeat RunService.Heartbeat:Wait() until _G.MapReady
+	repeat RunService.Heartbeat:Wait() until EventUtils:GetEvent("MapReady")
 	local conn
-	_G.MapReady:Connect(function(map)
+	EventUtils:ConnectEvent("MapReady",function(map)
 		if conn then
 			conn:Disconnect()
 			conn = nil

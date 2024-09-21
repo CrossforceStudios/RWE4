@@ -14,7 +14,48 @@ _G.CharacterStance = {};
 -- Necessary Modules
 local RemoteService = Resources:LoadLibrary("RemoteService")
 local CameraService = Resources:LoadLibrary("CameraService")
+-- Important Client Parts
+local RenderEngine = {};
 --CameraService:startClient()
+local soundUpdate do
+	local SoundBox2 = PseudoInstance.new("SoundBox",script.Parent.Footsteps,script.Parent.DeathSounds,script.Parent.JumpSounds)
+	SoundBox2:Setup()
+	--SoundBox2:SetStanceSounds(ClientSettings.StanceSounds)
+	soundUpdate = function(worldDt)
+		SoundBox2:UpdateAll(worldDt)
+	end
+end
+do
+	local sequences = {};
+	sequences.General = {};
+	sequences.Camera = {};
+	function RenderEngine:Start()
+		table.insert(Connections,RunService.Heartbeat:Connect(function(dt)
+			for i, seqFunc in ipairs(sequences["General"]) do
+				seqFunc(dt)
+			end
+		end))
+		RunService:BindToRenderStep("UpdateCam",Enum.RenderPriority.Camera.Value,function(dt)
+			--if (not CharacterParts.HAgent) or (not CharacterParts.HAgent.Health) then return end
+			--if CharacterParts.HAgent.Health > 0 and (not CharacterParts.HAgent:GetStateProperty("Unconscious"))  then
+				for i, seqFunc in ipairs(sequences["Camera"]) do
+					seqFunc(dt)
+				end
+			--end
+		end)
+	end
+	function RenderEngine:AddGeneralRender(renderFunc: (number) -> any)
+		table.insert(sequences["General"], renderFunc)
+	end
+	function RenderEngine:AddCameraRender(renderFunc: (number) -> any)
+		table.insert(sequences["Camera"], renderFunc)
+	end
+end
+function starterRenders()
+    RenderEngine:AddGeneralRender(function(dt)
+		soundUpdate(dt)					
+	end)
+end
 player.CharacterAdded:Connect(function(ch)
     Character = ch
     CharacterParts.Head = ch:WaitForChild("Head", 20)
