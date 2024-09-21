@@ -53,7 +53,7 @@ do
 		table.insert(sequences["Camera"], renderFunc)
 	end
 end
-function starterRenders()
+function startRenders()
     RenderEngine:AddGeneralRender(function(dt)
 		soundUpdate(dt)					
 	end)
@@ -63,5 +63,5 @@ player.CharacterAdded:Connect(function(ch)
     CharacterParts.Head = ch:WaitForChild("Head", 20)
     --CameraService:setCamMode("FirstPerson", CharacterParts.Head)
     CharacterParts.ASM = Resources:LoadLibrary("AnimateHelper")(Character)
-
+    startRenders()
 end)
