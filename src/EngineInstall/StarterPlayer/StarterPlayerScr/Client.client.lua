@@ -14,6 +14,8 @@ _G.CharacterStance = {};
 -- Necessary Modules
 local RemoteService = Resources:LoadLibrary("RemoteService")
 local CameraService = Resources:LoadLibrary("CameraService")
+local CameraService = Resources:LoadLibrary("PseudoInstance")
+
 -- Important Client Parts
 local RenderEngine = {};
 --CameraService:startClient()
