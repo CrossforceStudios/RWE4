@@ -18,6 +18,7 @@ local PseudoInstance = Resources:LoadLibrary("PseudoInstance")
 
 -- Important Client Parts
 local RenderEngine = {};
+local Connections = {};
 --CameraService:startClient()
 local soundUpdate do
 	local SoundBox2 = PseudoInstance.new("SoundBox",script.Parent.Footsteps,script.Parent.DeathSounds,script.Parent.JumpSounds)
@@ -57,6 +58,7 @@ function startRenders()
     RenderEngine:AddGeneralRender(function(dt)
 		soundUpdate(dt)					
 	end)
+	RenderEngine:Start()
 end
 player.CharacterAdded:Connect(function(ch)
     Character = ch
