@@ -1,0 +1,7 @@
+return {
+
+    Events = {
+        "KillAdded";
+        "PlayerAdded";
+    }
+};
