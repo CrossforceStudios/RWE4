@@ -8,11 +8,11 @@ return function(RWE4,Plugin,EditorLibraries,Libraries,loader,RBLXGUI,EI)
 	local pageCreate = RBLXGUI.Page.new({
 		Name = "CREATE/EDIT";
 		Open = true;
-	}, installerUI)
+	}, imUI)
 	local pageManager = RBLXGUI.Page.new({
 		Name = "MANAGE";
 		Open = false;
-	}, installerUI)
+	}, imUI)
 
     local function openIntManager(selection)
 		imUI.Content.Enabled = true
