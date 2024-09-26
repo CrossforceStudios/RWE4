@@ -20,7 +20,7 @@ end
 local SW = loadLibraryFrom("Editor","StudioWidgets")
 local Maid = loadLibraryFrom("Editor","Maid")
 local Signal = loadLibraryFrom("Editor","Signal")
-
+local RBLXGUI = require(script.Libraries.rblxgui.initialize)(plugin, "rblxgui")
 --- end Libs
 RWE4.Toolbar = Plugin:CreateToolbar("RW Engine 4")
 RWE4.Buttons = {};
@@ -78,7 +78,7 @@ do
 		print("[RWE4]: Starting RW Engine...")
 		for i, model in ipairs(script.Modules:GetChildren()) do
 			print(("[RWE4]: Initializing %s module..."):format(model.Name))
-			local data = require(model)(RWE4,Plugin,EditorLibraries,Libraries,loadLibraryFrom,script.EngineInstall)
+			local data = require(model)(RWE4,Plugin,EditorLibraries,Libraries,loadLibraryFrom,RBLXGUI,script.EngineInstall)
 			if data then
 				local button = SW.ImageButtonWithText.new(model.Name,
 					i,
