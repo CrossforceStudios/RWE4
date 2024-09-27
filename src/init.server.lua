@@ -1,4 +1,7 @@
+--- Globals
 local Plugin = plugin
+local ScriptEditorService = game:GetService("ScriptEditorService")
+----
 local RWE4 = {};
 local Libraries = {};
 local EditorLibraries = {};
@@ -21,6 +24,7 @@ local SW = loadLibraryFrom("Editor","StudioWidgets")
 local Maid = loadLibraryFrom("Editor","Maid")
 local Signal = loadLibraryFrom("Editor","Signal")
 local RBLXGUI = require(script.Libraries.rblxgui.initialize)(plugin, "rblxgui")
+
 --- end Libs
 RWE4.Toolbar = Plugin:CreateToolbar("RW Engine 4")
 RWE4.Buttons = {};
@@ -41,7 +45,19 @@ function RWE4:CloneAsset(name)
 		return asset
 	end
 end;
-
+function RWE4:getTemplatedSource(templateName, params)
+	local templateScript = script.Templates:FindFirstChild(templateName)
+	if templateScript then
+		if templateScript.Source ~= "" then
+			templateScript = templateScript:Clone()
+			templateScript.Source = require(templateScript):format(table.unpack(params))
+			return templateScript
+		end
+	end
+end;
+function RWE4:OpenScript(script2: LuaSourceContainer)
+	return ScriptEditorService:OpenScriptDocumentAsync(script2)
+end
 --- Themes
 RWE4.ThemeChanged = Signal.new()
 RWE4.Maid:AddTask(settings().Studio.ThemeChanged:Connect(function()

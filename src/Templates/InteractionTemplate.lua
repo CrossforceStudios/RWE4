@@ -18,6 +18,6 @@ return [[
             return true
         end;
         Location = function() return workspace.CurrentMap.Value:FindFirstChild("Example",true); end;
-        ActivationDistance = 15;
+        ActivationDistance = %d;
     }
 ]]
