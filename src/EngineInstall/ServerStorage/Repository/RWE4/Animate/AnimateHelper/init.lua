@@ -49,9 +49,15 @@ local Animate = PseudoInstance:Register("Animate",{
 		animNames = AnimationValues.animNames.R6;
 		runningFunctionIf   = function(self, speed)
 			if self.Figure:GetAttribute("Sprinting") then
+				if self.Figure:FindFirstAncestor("Mobs") then
+					self:stopToolAnimations()
+				end
 				self:playAnimation("run", 0.1, self.Humanoid)
-				self.CurrentAnimSpeed = speed / 21.5
+				self.CurrentAnimSpeed = speed / 22.5
 			else
+				if self.Figure:FindFirstAncestor("Mobs") and self.toolAnim == "None" then
+					self:playToolAnimation("toolnone", self.toolTransitionTime, self.Humanoid, Enum.AnimationPriority.Idle)
+				end
 				self:playAnimation("walk", 0.1, self.Humanoid)
 				self.CurrentAnimSpeed = speed / 14.5
 			end
@@ -175,8 +181,8 @@ local Animate = PseudoInstance:Register("Animate",{
 					if anim.priority then
 						self.animTable[name].anims[idx].anim.Priority = anim.priority
 					end
-					if anim.priority then
-						self.animTable[name].anims[idx].anim.Priority = anim.priority
+					if anim.aipriority and self.Figure:FindFirstAncestor("Mobs") then
+						self.animTable[name].anims[idx].anim.Priority = anim.aipriority
 					end
 					self.animTable[name].anims[idx].anim:AdjustWeight(anim.weight)
 					weightFinder[self.animTable[name].anims[idx].anim] = anim.weight
@@ -362,6 +368,7 @@ local Animate = PseudoInstance:Register("Animate",{
 			end),"Disconnect")
 		end	
 		self.Janitor:Add(self.Figure.ChildAdded:Connect(function(c)
+			
 			
 			local tool = self:getTool()
 			if tool and tool:FindFirstChild("HoldPart") then

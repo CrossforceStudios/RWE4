@@ -9,7 +9,7 @@ return {
 
 		}, 
 		run = 	{ 
-			{ id = "rbxassetid://18862738744", weight = 10, priority = Enum.AnimationPriority.Core; } 
+			{ id = "rbxassetid://18862738744", weight = 10, priority = Enum.AnimationPriority.Core; aipriority = Enum.AnimationPriority.Idle; } 
 		},
 		
 		jump = 	{

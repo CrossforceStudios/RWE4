@@ -63,6 +63,8 @@ end
 player.CharacterAdded:Connect(function(ch)
     Character = ch
     CharacterParts.Head = ch:WaitForChild("Head", 20)
+	player.CameraMode = Enum.CameraMode.LockFirstPerson
+	InputComp.ToggleMouseControl(false, InputComp.Platform ~= "Touch")
     --CameraService:setCamMode("FirstPerson", CharacterParts.Head)
     CharacterParts.ASM = Resources:LoadLibrary("AnimateHelper")(Character)
     startRenders()
