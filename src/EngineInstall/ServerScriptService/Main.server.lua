@@ -1,5 +1,6 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
+local PhysicsService = game:GetService("PhysicsService")
 local Resources = require(ReplicatedStorage:WaitForChild("Resources",10))
 -- Setup your flags here
 Resources:SetupFlags({
@@ -9,15 +10,71 @@ Resources:SetupFlags({
 local Players = game:GetService("Players")
 local RemoteService = Resources:LoadLibrary("RemoteService")
 local EventSystem = Resources:LoadLibrary("EventUtils")
+local createViewModel = Resources:LoadLibrary("createViewModel")
+
 -- Event System
 local ServerSettings = require(script.Parent.ServerSettings)
 for _, event in ServerSettings.Events do
     EventSystem:AddEvent(event)
 end
+-- Arm C0 Values
+local armC0 = {
+	CFrame.new(-1.5, 0, 0) * CFrame.Angles(math.rad(90), 0, 0);
+	CFrame.new(1.5, 0, 0) * CFrame.Angles(math.rad(90), 0, 0);
+}
+-- Other values
+local Grips = {};
+local gunIgnores = {};
+local animWelds = {};
+------
 
 for _, pair in ServerSettings.CollisionPairs do
-	PhysicsService:CollisionGroupSetCollidable(pair[1], pair[2], pair[3])
+	if pair[1] == "Default" or pair[2] == "Default" then
+		if PhysicsService:IsCollisionGroupRegistered(pair[1]) and PhysicsService:IsCollisionGroupRegistered(pair[2]) then
+			PhysicsService:CollisionGroupSetCollidable(pair[1], pair[2], pair[3])
+		else
+			if pair[1] == "Default" then
+				PhysicsService:RegisterCollisionGroup(pair[2])
+			else
+				PhysicsService:RegisterCollisionGroup(pair[1])
+			end
+			PhysicsService:CollisionGroupSetCollidable(pair[1], pair[2], pair[3])
+		end
+	else
+		if PhysicsService:IsCollisionGroupRegistered(pair[1]) and PhysicsService:IsCollisionGroupRegistered(pair[2]) then
+			PhysicsService:CollisionGroupSetCollidable(pair[1], pair[2], pair[3])
+		else
+			PhysicsService:RegisterCollisionGroup(pair[1])
+			PhysicsService:RegisterCollisionGroup(pair[2])
+			PhysicsService:CollisionGroupSetCollidable(pair[1], pair[2], pair[3])
+		end
+	end
 end
+-----
+function runInit(plr: Player)
+	plr.CharacterAdded:Connect(function(c)
+		local head = c:WaitForChild("Head",200)
+		local torso  = c:WaitForChild("Torso",200)
+		local ViewM do
+			local RArm = c:FindFirstChild("Right Arm")
+			local LArm = c:FindFirstChild("Left Arm")
+			local ViewM2, gripTab = createViewModel(plr, c, torso, armC0, gMH)
+			ViewM = ViewM2
+			LArm.Size = Vector3.new(0.8,2,0.8)
+			RArm.Size = Vector3.new(0.8,2,0.8)
+			Grips[plr] = {
+				Right = gripTab[1];
+				Left = gripTab[2];
+			}
+			gunIgnores[plr] = ViewM.gunIgnore;
+			animWelds[plr.Name] = ViewM.animWeld;	
+			RemoteService.send("Client",plr,"SetPartsClient", ViewM)
+			RemoteService.send("Client",plr,"SetGripsClient",gripTab)
+		end
+	end)
+end
+EventSystem:ConnectEvent("PlayerAdded", runInit)
+-----
 
 Players.PlayerAdded:Connect(function(plr)
 	EventSystem:FireEvent("PlayerAdded", plr)

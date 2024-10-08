@@ -8,6 +8,7 @@ Resources:SetupFlags({
 
 })
 local Character = nil;
+local Humanoid = nil;
 local CharacterParts = {};
 
 _G.CharacterStance = {};
@@ -15,11 +16,37 @@ _G.CharacterStance = {};
 local RemoteService = Resources:LoadLibrary("RemoteService")
 local CameraService = Resources:LoadLibrary("CameraService")
 local PseudoInstance = Resources:LoadLibrary("PseudoInstance")
+local fastSpawn = Resources:LoadLibrary("FastSpawn")
+local InputComp = Resources:LoadLibrary("InputComponent")
+local Janitor = Resources:LoadLibrary("Janitor")
+-- Shortcuts
+local VEC2 = Vector2.new
+local RAD = math.rad
+----
+_G.CameraAng = VEC2(0,0)
 
 -- Important Client Parts
 local RenderEngine = {};
 local Connections = {};
---CameraService:startClient()
+local ViewModel = {
+	gunIgnore = nil;
+	playerFolder = nil;
+	headWeld = nil;
+	headWeld2 = nil;
+	armBase = nil;
+	animWeld = nil;
+	ABWeld = nil;
+	LWeld = nil;
+	RWeld = nil;
+	LWeld2 = nil;
+	RWeld2 = nil;
+	Grips = {
+		Left = nil;
+		Right = nil;
+		Current = "Right";
+	};
+}
+CameraService:startClient()
 local soundUpdate do
 	local SoundBox2 = PseudoInstance.new("SoundBox",script.Parent.Footsteps,script.Parent.DeathSounds,script.Parent.JumpSounds)
 	SoundBox2:Setup()
@@ -53,6 +80,11 @@ do
 	function RenderEngine:AddCameraRender(renderFunc: (number) -> any)
 		table.insert(sequences["Camera"], renderFunc)
 	end
+	RenderEngine:AddCameraRender(function(dt)
+		local camOff = Vector2.new(0,0)
+		CameraService.CurrentCamMode.cameraPerspective = _G.CameraAng + camOff
+		--CameraService.CurrentCamMode.offset = V3(finalCamOffset.X,finalCamOffset.Y,CharState.crawlCamRot + finalCamOffset.Z + (CharState.leanAnim.Pos.p));
+	end)
 end
 function startRenders()
     RenderEngine:AddGeneralRender(function(dt)
@@ -60,12 +92,62 @@ function startRenders()
 	end)
 	RenderEngine:Start()
 end
+RemoteService.listen("Client","Send","SetPartsClient",function(dict)
+	for k, v  in pairs(dict) do
+		ViewModel[k] = v;
+	end
+end)
+RemoteService.listen("Client","Send","SetGripsClient",function(grips)
+	ViewModel.Grips.Right = grips[1]
+	ViewModel.Grips.Left = grips[2]
+end)
 player.CharacterAdded:Connect(function(ch)
     Character = ch
+	Humanoid = Character:WaitForChild("Humanoid", 20)
     CharacterParts.Head = ch:WaitForChild("Head", 20)
 	player.CameraMode = Enum.CameraMode.LockFirstPerson
 	InputComp.ToggleMouseControl(false, InputComp.Platform ~= "Touch")
-    --CameraService:setCamMode("FirstPerson", CharacterParts.Head)
+    CameraService:setCamMode("FirstPerson", CharacterParts.Head)
     CharacterParts.ASM = Resources:LoadLibrary("AnimateHelper")(Character)
     startRenders()
+end)
+----- Keybinds ------
+local Jan = Janitor.new()
+local function UpdateGeneralKeys()
+	Jan:Add(InputComp.RegisterSchemeAxis("General","LookKeyboard",Enum.UserInputType.MouseMovement,"Rotation",Enum.KeyCode.Unknown):Connect(function(i,pos)
+		if Character then
+			if Humanoid then
+				if  Humanoid.Health > 0 then
+					--if (not CameraService.CutsceneSysBusy) and (CharState.MoveEnabled) then
+						if  (not InputComp.Interacting) then
+							local rawCamAng = _G.CameraAng  - pos
+							_G.CameraAng  = VEC2(rawCamAng.x, (rawCamAng.y > RAD(80) and RAD(80) or rawCamAng.y < RAD(-80) and RAD(-80) or rawCamAng.y))		
+							if ViewModel.headWeld then
+								if ViewModel.headWeld.Part1 and ViewModel.headWeld.Part1:IsDescendantOf(workspace) then
+									if Humanoid.SeatPart then
+										if Humanoid.SeatPart.Name ~= "GunnerSeat" then					
+											return
+										end
+									end
+									uDelta = VEC2(math.deg(pos.X),math.deg(pos.Y))
+									kickCode = nil;
+								end
+							end		
+						end
+					--end	
+				end
+			end
+		elseif CameraService.CurrentCamMode.Name:find("Spectate") then
+			local rawCamAng = _G.CameraAng  - pos
+			_G.CameraAng  = VEC2(rawCamAng.x, (rawCamAng.y > RAD(80) and RAD(80) or rawCamAng.y < RAD(-80) and RAD(-80) or rawCamAng.y))		
+			uDelta = VEC2(math.deg(pos.X),math.deg(pos.Y))
+		end
+
+	end),"Disconnect")	
+end;
+local function UpdateKeys()
+	UpdateGeneralKeys()
+end
+fastSpawn(function()
+	UpdateKeys()
 end)
