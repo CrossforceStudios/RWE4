@@ -339,7 +339,7 @@ return function(API, InputComponent)
 		defaultT = graphTB
 	end
 	function InputComponent.OpenMenu(graphTB,loadoutObj)
-		RadialMenu:openGraphMenu(graphTB,loadoutObj)
+		RadialMenu.openPCMenu(graphTB,loadoutObj)
 	end
 	function InputComponent.SetRadialUI(ui)
 		RadialMenu.RadialUI = ui

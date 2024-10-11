@@ -28,4 +28,11 @@ return {
 	Events = {
 		"MapReady";
 	};
+	MovementMap = {
+		[Enum.PlayerActions.CharacterForward] = Enum.KeyCode.W;
+		[Enum.PlayerActions.CharacterBackward] = Enum.KeyCode.S;
+		[Enum.PlayerActions.CharacterLeft] = Enum.KeyCode.A;
+		[Enum.PlayerActions.CharacterRight] = Enum.KeyCode.D;
+		[Enum.PlayerActions.CharacterJump] = {Enum.KeyCode.Space;Enum.KeyCode.ButtonA};
+	};	
 }

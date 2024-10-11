@@ -26,6 +26,8 @@ local RAD = math.rad
 _G.CameraAng = VEC2(0,0)
 
 -- Important Client Parts
+local ClientSettings = require(script.Parent:WaitForChild("ClientSettings", 20))
+
 local RenderEngine = {};
 local Connections = {};
 local ViewModel = {
@@ -46,6 +48,7 @@ local ViewModel = {
 		Current = "Right";
 	};
 }
+---------
 CameraService:startClient()
 local soundUpdate do
 	local SoundBox2 = PseudoInstance.new("SoundBox",script.Parent.Footsteps,script.Parent.DeathSounds,script.Parent.JumpSounds)
@@ -83,6 +86,12 @@ do
 	RenderEngine:AddCameraRender(function(dt)
 		local camOff = Vector2.new(0,0)
 		CameraService.CurrentCamMode.cameraPerspective = _G.CameraAng + camOff
+		InputComp.CharacterController:UpdateMovement(Character,InputComp.CharacterController.IState,mm)		
+		InputComp.CharacterController:Update(dt,function(jump)
+			Humanoid.Jump = jump --and Character:GetAttribute("CurrentStamina") >= threshold
+		end)
+		InputComp.CharacterController:UpdateJump()
+
 		--CameraService.CurrentCamMode.offset = V3(finalCamOffset.X,finalCamOffset.Y,CharState.crawlCamRot + finalCamOffset.Z + (CharState.leanAnim.Pos.p));
 	end)
 end
@@ -110,11 +119,22 @@ player.CharacterAdded:Connect(function(ch)
     CameraService:setCamMode("FirstPerson", CharacterParts.Head)
     CharacterParts.ASM = Resources:LoadLibrary("AnimateHelper")(Character)
     startRenders()
+	table.insert(Connections,Humanoid.StateChanged:Connect(function(old,new)
+		InputComp.CharacterController.State = (new)
+	end))
+	InputComp.CharacterController:Enable(true)
+end)
+player.CharacterRemoving:Connect(function(c)
+	for _, conn in Connections do
+		conn:Disconnect()
+	end
+	table.clear(Connections)
+	InputComp.CharacterController:Enable(false)
 end)
 ----- Keybinds ------
 local Jan = Janitor.new()
 local function UpdateGeneralKeys()
-	Jan:Add(InputComp.RegisterSchemeAxis("General","LookKeyboard",Enum.UserInputType.MouseMovement,"Rotation",Enum.KeyCode.Unknown):Connect(function(i,pos)
+	local function lookAround(pos,noDeg,gamepad)
 		if Character then
 			if Humanoid then
 				if  Humanoid.Health > 0 then
@@ -129,7 +149,7 @@ local function UpdateGeneralKeys()
 											return
 										end
 									end
-									uDelta = VEC2(math.deg(pos.X),math.deg(pos.Y))
+									uDelta = VEC2(if noDeg then pos.X else math.deg(pos.X),if noDeg then pos.Y else math.deg(pos.Y))
 									kickCode = nil;
 								end
 							end		
@@ -140,14 +160,27 @@ local function UpdateGeneralKeys()
 		elseif CameraService.CurrentCamMode.Name:find("Spectate") then
 			local rawCamAng = _G.CameraAng  - pos
 			_G.CameraAng  = VEC2(rawCamAng.x, (rawCamAng.y > RAD(80) and RAD(80) or rawCamAng.y < RAD(-80) and RAD(-80) or rawCamAng.y))		
-			uDelta = VEC2(math.deg(pos.X),math.deg(pos.Y))
+			uDelta = VEC2(if noDeg then pos.X else math.deg(pos.X),if noDeg then pos.Y else math.deg(pos.Y))
 		end
+	end
 
+	Jan:Add(InputComp.RegisterSchemeAxis("General","LookKeyboard",Enum.UserInputType.MouseMovement,"Rotation",Enum.KeyCode.Unknown):Connect(function(i,pos)
+		lookAround(pos)
 	end),"Disconnect")	
 end;
 local function UpdateKeys()
 	UpdateGeneralKeys()
+	for k, v in pairs(ClientSettings.MovementMap) do
+		if typeof(v) == "table" then
+			for _, ev in ipairs(v) do
+				InputComp.CharacterController:SetInput(k,ev)
+			end
+			continue
+		end
+		InputComp.CharacterController:SetInput(k,v)
+	end
 end
 fastSpawn(function()
+	InputComp.SetupCharacter()
 	UpdateKeys()
 end)
