@@ -5,11 +5,11 @@ return {
 			{ id = "rbxassetid://180435792", weight = 1, priority = Enum.AnimationPriority.Core; }
 		},
 		walk = 	{ 	
-			{ id = "rbxassetid://18862520248", weight = 10, priority = Enum.AnimationPriority.Core; } 
+			{ id = "rbxassetid://180426354", weight = 10, priority = Enum.AnimationPriority.Core; } 
 
 		}, 
 		run = 	{ 
-			{ id = "rbxassetid://18862738744", weight = 10, priority = Enum.AnimationPriority.Core; aipriority = Enum.AnimationPriority.Idle; } 
+			{ id = "rbxassetid://180426354", weight = 10, priority = Enum.AnimationPriority.Core; aipriority = Enum.AnimationPriority.Idle; } 
 		},
 		
 		jump = 	{

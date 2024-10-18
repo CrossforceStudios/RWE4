@@ -47,5 +47,7 @@ return function(ei)
         end
     end)
     installService("Workspace")
-
+    local Players = game:GetService("Players") do
+        Players.CharacterAutoLoads = false
+    end
 end

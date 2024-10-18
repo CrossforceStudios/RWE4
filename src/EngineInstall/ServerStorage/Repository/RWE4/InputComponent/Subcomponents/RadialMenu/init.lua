@@ -361,20 +361,21 @@ return function(API, InputComponent)
 			if io.KeyCode == Enum.KeyCode.LeftAlt then
 				defToggle = not defToggle
 				if defToggle then
-					if #RadialMenu.RadialUI:GetChildren() <= 0 then
-						if optionsT then
+					if RadialMenu.RadialUI then
+						if #RadialMenu.RadialUI:GetChildren() > 0  then
 							RadialMenu:deselectMenu(true)
 							RadialMenu.InteractionSelected:Fire(nil)
-						end
+						end	
 						RadialMenu:openGraphMenu(defaultT)
 						API.UIS.MouseBehavior = Enum.MouseBehavior.Default
 					end
 				else
-					if #RadialMenu.RadialUI:GetChildren() > 0  then
-						RadialMenu:deselectMenu(true)
-						RadialMenu.InteractionSelected:Fire(nil)
-						GuiService:RemoveSelectionGroup("RadialMenu")
-
+					if RadialMenu.RadialUI then
+						if #RadialMenu.RadialUI:GetChildren() > 0  then
+							RadialMenu:deselectMenu(true)
+							RadialMenu.InteractionSelected:Fire(nil)
+							GuiService:RemoveSelectionGroup("RadialMenu")
+						end	
 					end
 					API.UIS.MouseBehavior = Enum.MouseBehavior.LockCenter
 				end
