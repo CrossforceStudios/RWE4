@@ -3,6 +3,7 @@ local RunService = game:GetService("RunService")
 local Resources = require(ReplicatedStorage:WaitForChild("Resources",10))
 local Players = game:GetService("Players")
 local player = Players.LocalPlayer
+local Components = Resources:GetLocalTable("Components")
 -- Setup your flags here
 Resources:SetupFlags({
 
@@ -110,6 +111,13 @@ function startRenders()
     RenderEngine:AddGeneralRender(function(dt)
 		soundUpdate(dt)					
 	end)
+	RenderEngine:AddGeneralRender(function(dt)
+		--CharState.walkSpeed = CharState:calcWalkSpeed(CurrentItem.Settings and CurrentItem.Settings.baseWalkSpeed or 14)
+		--Humanoid.WalkSpeed = CharState.walkSpeed
+		if  ViewModel.Shadow then
+			ViewModel.Shadow:Update(Humanoid.Sit)	
+		end	
+	end)
 	RenderEngine:Start()
 end
 RemoteService.listen("Client","Send","SetPartsClient",function(dict)
@@ -128,8 +136,11 @@ player.CharacterAdded:Connect(function(ch)
 	CharacterParts.HRP = Character.PrimaryPart
 	player.CameraMode = Enum.CameraMode.LockFirstPerson
 	InputComp.ToggleMouseControl(false, InputComp.Platform ~= "Touch")
-    CameraService:setCamMode("FirstPerson", CharacterParts.Head)
     CharacterParts.ASM = Resources:LoadLibrary("AnimateHelper")(Character)
+	Humanoid:SetStateEnabled(Enum.HumanoidStateType.Swimming,false)
+    CameraService:setCamMode("FirstPerson", CharacterParts.Head)
+	ViewModel.Shadow = PseudoInstance.new("CharacterShadow",Character,player,{ViewModel.gunIgnore});
+	ViewModel.Shadow:InitShadow()
     startRenders()
 	table.insert(Connections,Humanoid.StateChanged:Connect(function(old,new)
 		InputComp.CharacterController.State = (new)
@@ -196,5 +207,8 @@ local function UpdateKeys()
 end
 fastSpawn(function()
 	InputComp.SetupCharacter()
+
+	Components.Input = InputComp
+	Components.Camera = CameraService
 	UpdateKeys()
 end)
