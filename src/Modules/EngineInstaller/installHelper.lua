@@ -47,6 +47,19 @@ return function(ei)
         end
     end)
     installService("Workspace")
+    local Teams = game:GetService("Teams") do
+        local t1 = Instance.new("Team")
+        t1.Name = "Red Team"
+        t1.TeamColor = BrickColor.new("Bright red")
+        t1.Parent = Teams
+        t1.AutoAssignable = false
+        local t2 = Instance.new("Team")
+        t2.Name = "Blue Team"
+        t2.TeamColor = BrickColor.new("Bright blue")
+        t2.Parent = Teams
+        t2.AutoAssignable = false
+    end
+
     local Players = game:GetService("Players") do
         Players.CharacterAutoLoads = false
     end

@@ -91,18 +91,6 @@ do
 			Humanoid.Jump = jump --and Character:GetAttribute("CurrentStamina") >= threshold
 		end)
 		InputComp.CharacterController:UpdateJump()
-
-		--CameraService.CurrentCamMode.offset = V3(finalCamOffset.X,finalCamOffset.Y,CharState.crawlCamRot + finalCamOffset.Z + (CharState.leanAnim.Pos.p));
-	end)
-	RenderEngine:AddCameraRender(function(dt)
-		local camOff = Vector2.new(0,0)
-		CameraService.CurrentCamMode.cameraPerspective = _G.CameraAng + camOff
-		InputComp.CharacterController:UpdateMovement(Character,InputComp.CharacterController.IState)		
-		InputComp.CharacterController:Update(dt,function(jump)
-			Humanoid.Jump = jump --and Character:GetAttribute("CurrentStamina") >= threshold
-		end)
-		InputComp.CharacterController:UpdateJump()
-		--CameraService.CurrentCamMode.offset = V3(finalCamOffset.X,finalCamOffset.Y,CharState.crawlCamRot + finalCamOffset.Z + (CharState.leanAnim.Pos.p));
 		if ViewModel.headWeld and (not Humanoid.Sit) and (not Character.ExitingVehicle.Value) then
 			--ViewModel.headWeld.C1 = CF.ANG(-_G.CameraAng.y - finalCamOffset.Y, 0, 0)
 			ViewModel.headWeld.C1 = CFrame.Angles(-_G.CameraAng.y, 0, 0)
@@ -114,6 +102,7 @@ do
 			--CharacterParts.HRP.CFrame = CF.RAW(CharacterParts.HRP.Position) * CF.ANG(0, _G.CameraAng.x + finalCamOffset.X, 0)
 			CharacterParts.HRP.CFrame = CFrame.new(CharacterParts.HRP.Position) * CFrame.Angles(0, _G.CameraAng.x, 0)
 		end
+		--CameraService.CurrentCamMode.offset = V3(finalCamOffset.X,finalCamOffset.Y,CharState.crawlCamRot + finalCamOffset.Z + (CharState.leanAnim.Pos.p));
 	end)
 
 end

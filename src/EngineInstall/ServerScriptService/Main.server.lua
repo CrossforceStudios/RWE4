@@ -68,8 +68,15 @@ function runInit(plr: Player)
 			}
 			gunIgnores[plr] = ViewM.gunIgnore;
 			animWelds[plr.Name] = ViewM.animWeld;	
-			RemoteService.send("Client",plr,"SetPartsClient", ViewM)
-			RemoteService.send("Client",plr,"SetGripsClient",gripTab)
+			task.delay(0.5, function()
+				RemoteService.send("Client",plr,"SetPartsClient", ViewM)
+				RemoteService.send("Client",plr,"SetGripsClient",gripTab)
+			end)
+		end
+	end)
+	task.delay(10, function()
+		if true then
+			plr:LoadCharacter()
 		end
 	end)
 end
