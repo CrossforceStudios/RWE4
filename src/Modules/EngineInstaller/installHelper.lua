@@ -63,4 +63,8 @@ return function(ei)
     local Players = game:GetService("Players") do
         Players.CharacterAutoLoads = false
     end
+
+    local ChangeHistoryService = game:GetService("ChangeHistoryService") do
+        ChangeHistoryService:SetWaypoint("Install RWE4 Framework")
+    end
 end

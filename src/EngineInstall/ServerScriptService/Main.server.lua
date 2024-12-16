@@ -11,7 +11,7 @@ local Players = game:GetService("Players")
 local RemoteService = Resources:LoadLibrary("RemoteService")
 local EventSystem = Resources:LoadLibrary("EventUtils")
 local createViewModel = Resources:LoadLibrary("createViewModel")
-
+local FactionService = Resources:LoadLibrary("FactionService")
 -- Event System
 local ServerSettings = require(script.Parent.ServerSettings)
 for _, event in ServerSettings.Events do
@@ -86,3 +86,4 @@ EventSystem:ConnectEvent("PlayerAdded", runInit)
 Players.PlayerAdded:Connect(function(plr)
 	EventSystem:FireEvent("PlayerAdded", plr)
 end)
+FactionService:startServer()

@@ -1,7 +1,6 @@
 local FactionService = {}
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Resources = require(ReplicatedStorage:WaitForChild("Resources"))
-local Replica = Resources:LoadLibrary("Replica")
 local CollectionService = game:GetService("CollectionService")
 local Teams = game:GetService("Teams")
 local Players = game:GetService("Players")
@@ -10,6 +9,7 @@ local RemoteService = Resources:LoadLibrary("RemoteService")
 local Table = Resources:LoadLibrary("Table")
 local Janitor = Resources:LoadLibrary("Janitor")
 local FastSpawn = Resources:LoadLibrary("FastSpawn")
+local TeamManifest = Resources:LoadConfiguration("TeamManifest")
 
 local RunService = game:GetService("RunService")
 
@@ -58,7 +58,6 @@ end
 function FactionService:RegisterFaction(factionQueue,team)
 	local teamData = team
 	teamData:SetAttribute("PlayerCount",factionQueue[team])
-	Replica.Register(team,teamData)
 end
 
 function FactionService:SelectFaction(player,team)
@@ -297,15 +296,11 @@ function FactionService:AddToCache(member)
 end
 
 FactionService.AvailableAttackingAllegiances = {
-	"Evil";
-	"PrequelCampaign";
-	"Goverment";
+	"OpFor";
 }
 
 FactionService.AvailableDefendingAllegiances = {
-	"Good";
-	"OriginalCampaign";
-	"Insurgent";
+	"BluFor";
 }
 
 local AttackingTable = {}
@@ -325,23 +320,9 @@ FactionService.PrimaryAllegiance = WPF.new({
 	[FactionService.DefendingAllegiance] = 0.5;
 })
 
-local opposingAllegiances = {
-	["Good"] = "Evil";
-	["Evil"] = "Good";
-	["OriginalCampaign"] = "PrequelCampaign";
-	["PrequelCampaign"] = "OriginalCampaign";
-	["Goverment"] = "Insurgent";
-	["Insurgent"] = "Government";
-}
+local opposingAllegiances = TeamManifest.OppositeAlliances
 
-local directNemeses = {
-	[game.Teams.RobloxianRepublic] = game.Teams.BloxxerInsurgency;
-	[game.Teams.BloxxerInsurgency] = game.Teams.RobloxianRepublic;
-	[game.Teams.Staffel68] = game.Teams.RST;
-	[game.Teams.RST] = game.Teams.Staffel68;
-	[game.Teams.CrossroadsRebels] = game.Teams.BloxxerInsurgency;
-	[game.Teams.Polizei86] = game.Teams.RST;
-}
+local directNemeses = TeamManifest.Nemeses
 function FactionService:GetAdversaries()
 	return directNemeses
 end
