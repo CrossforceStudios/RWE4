@@ -90,7 +90,7 @@ return {
 		Components.Lighting:ChangeVolumetricLayers(ClientSettings.VolumeLighting.Depth)		
 		Components.Lighting:ChangeVolumetricProperty("RenderMethod", Enumeration.VolumetricRenderMethod[ClientSettings.VolumeLighting.RenderMethod].Value)		
 		Components.Lighting:ChangeVolumetricProperty("LightEmission", ClientSettings.VolumeLighting.LightEmission)	
-		if Resources:GetGlobalFeature("LightingSync") then
+		if Resources:FindGlobalFeature("LightingSync") then
 			repeat task.wait()
 			until Components.Settings.Settings
 		end
