@@ -35,6 +35,12 @@ local UNINSTANTIABLE_INSTANCES = setmetatable({
 	end;
 })
 
+
+
+
+
+
+
 function Resources:GetLocalTable(TableName) -- Returns a cached table by TableName, generating if non-existant
 	TableName = self ~= Resources and self or TableName
 	local Table = Caches[TableName]
@@ -45,6 +51,18 @@ function Resources:GetLocalTable(TableName) -- Returns a cached table by TableNa
 	end
 
 	return Table
+end
+
+local Components = Resources:GetLocalTable("Components")
+
+function Resources:AddComponent(name: string, component: any)
+	if component then
+		Components[name] = component
+	end
+end
+
+function Resources:GetComponent(name: string)
+	return Components[name]
 end
 
 local function GetFirstChild(Folder, InstanceName, InstanceType)
@@ -766,6 +784,10 @@ function Resources:SetFlag(flagName: string, val: boolean)
 	if tab and self:typeof(val) == "boolean" then
 		tab[flagName] = val
 	end
+end
+function Resources:FindGlobalFeature(featureName: string) : boolean?
+	local features = Resources:LoadConfiguration("GlobalFeatures")
+	return features[featureName] or false
 end
 local Loaders = {
 	Config = Resources.LoadConfiguration;

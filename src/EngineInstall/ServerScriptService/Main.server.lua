@@ -1,6 +1,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local PhysicsService = game:GetService("PhysicsService")
+local Lighting = game:GetService("Lighting")
 local Resources = require(ReplicatedStorage:WaitForChild("Resources",10))
 -- Setup your flags here
 Resources:SetupFlags({
@@ -12,6 +13,8 @@ local RemoteService = Resources:LoadLibrary("RemoteService")
 local EventSystem = Resources:LoadLibrary("EventUtils")
 local createViewModel = Resources:LoadLibrary("createViewModel")
 local FactionService = Resources:LoadLibrary("FactionService")
+local PhotoSiris = Resources:LoadLibrary("PhotoSiris")
+
 -- Event System
 local ServerSettings = require(script.Parent.ServerSettings)
 for _, event in ServerSettings.Events do
@@ -59,6 +62,8 @@ function runInit(plr: Player)
 			local RArm = c:FindFirstChild("Right Arm")
 			local LArm = c:FindFirstChild("Left Arm")
 			local ViewM2, gripTab = createViewModel(plr, c, torso, armC0, gMH)
+			head:SetNetworkOwner(plr)
+			torso:SetNetworkOwner(plr)
 			ViewM = ViewM2
 			LArm.Size = Vector3.new(0.8,2,0.8)
 			RArm.Size = Vector3.new(0.8,2,0.8)
@@ -83,7 +88,14 @@ end
 EventSystem:ConnectEvent("PlayerAdded", runInit)
 -----
 
+-----
 Players.PlayerAdded:Connect(function(plr)
 	EventSystem:FireEvent("PlayerAdded", plr)
 end)
 FactionService:startServer()
+-----
+print(Resources:FindGlobalFeature("DayNightCycle"))
+if Resources:FindGlobalFeature("DayNightCycle") then
+	PhotoSiris:SetupClock(Lighting.ClockTime)
+	PhotoSiris:StartCycle()
+end

@@ -28,6 +28,13 @@ return {
 	Events = {
 		"MapReady";
 	};
+	VolumeLighting = {
+		Depth = 50;
+		LightEmission = 1;
+		RenderMethod = "Beams";
+		LayerSpacing = 1;
+		Transparency = 0.996;
+	};
 	MovementMap = {
 		[Enum.PlayerActions.CharacterForward] = Enum.KeyCode.W;
 		[Enum.PlayerActions.CharacterBackward] = Enum.KeyCode.S;

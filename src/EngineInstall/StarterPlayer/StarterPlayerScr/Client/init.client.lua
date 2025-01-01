@@ -4,6 +4,16 @@ local Resources = require(ReplicatedStorage:WaitForChild("Resources",10))
 local Players = game:GetService("Players")
 local player = Players.LocalPlayer
 local Components = Resources:GetLocalTable("Components")
+Resources:AddComponent("Tweener", Resources:LoadLibrary("TweenHandler")())
+print(Components.Tweener)
+-- ClientPlugins Loading
+local ClientPlugins = {} do
+	for i, pl: ModuleScript in script.Plugins:GetDescendants() do
+		if pl:IsA("ModuleScript") then
+			ClientPlugins[i] = require(pl)
+		end
+	end
+end
 -- Setup your flags here
 Resources:SetupFlags({
 
@@ -20,11 +30,21 @@ local PseudoInstance = Resources:LoadLibrary("PseudoInstance")
 local fastSpawn = Resources:LoadLibrary("FastSpawn")
 local InputComp = Resources:LoadLibrary("InputComponent")
 local Janitor = Resources:LoadLibrary("Janitor")
+local removeElement = Resources:LoadLibrary("removeElement")
+local PhotoSiris = Resources:LoadLibrary("PhotoSiris")
+local Lerps = Resources:LoadLibrary("Lerps")
+local Enumeration = Resources:LoadLibrary("Enumeration")
+local EventUtils = Resources:LoadLibrary("EventUtils")
+
 -- Shortcuts
 local VEC2 = Vector2.new
+local V3 = Vector3.new
 local RAD = math.rad
+local RNG = Random.new()
 ----
 _G.CameraAng = VEC2(0,0)
+----
+local UP_RATE = 0.05
 
 -- Important Client Parts
 local ClientSettings = require(script.Parent:WaitForChild("ClientSettings", 20))
@@ -108,6 +128,23 @@ do
 
 end
 function startRenders()
+	fastSpawn(function()
+		while  Character.Parent do
+			local animWeld = ViewModel.animWeld
+			if animWeld and animWeld.Parent then
+				pcall(function()
+					RemoteService.sendU("Server","SignalTween",CharacterJoints.Root,CharacterJoints.Root.C0,false,"Smooth",0.2)
+				end)
+				task.wait(0.1)
+				pcall(function()
+					RemoteService.sendU("Server","SignalTween",ViewModel.headWeld,false,ViewModel.headWeld.C1,"Smooth",if UP_RATE < 0.05 then UP_RATE * 2 else UP_RATE * 2)
+					RemoteService.sendU("Server","SignalTween",animWeld,animWeld.C0,animWeld.C1,"Smooth",if UP_RATE < 0.05 then UP_RATE * 2 else UP_RATE * 2)
+				end)
+				task.wait(if UP_RATE < 0.05 then UP_RATE * 2 else UP_RATE * 2)								
+			end
+			task.wait(UP_RATE)
+		end
+	end)
     RenderEngine:AddGeneralRender(function(dt)
 		soundUpdate(dt)					
 	end)
@@ -118,6 +155,7 @@ function startRenders()
 			ViewModel.Shadow:Update(Humanoid.Sit)	
 		end	
 	end)
+	
 	RenderEngine:Start()
 end
 RemoteService.listen("Client","Send","SetPartsClient",function(dict)
@@ -129,6 +167,84 @@ RemoteService.listen("Client","Send","SetGripsClient",function(grips)
 	ViewModel.Grips.Right = grips[1]
 	ViewModel.Grips.Left = grips[2]
 end)
+do 
+	local tween = Resources:GetComponent("Tweener")
+	tween:addTweenFunction("Joint", function(Joint,newC0,newC1,Alpha,Duration,isBlade,ignoreRepl,action)
+		if not Joint then return end
+		if typeof(Alpha) == "string" then 
+			Alpha = getAlpha(Alpha)
+		end
+		runAsync(function()
+			if Duration <= 0 then
+				if not ignoreRepl then
+					if newC0 then
+						Joint.C0 = newC0
+						RemoteService.send("Server","SetJointC0",Joint,Joint.C0)
+					end
+					if newC1 then
+						Joint.C1 = newC1
+						RemoteService.send("Server","SetJointC1",Joint,Joint.C1)
+					end
+				end
+			else
+				if newC0 then
+					local t0 = tick()
+					if Joint.Name ~= "BoltWeld" then
+						local tweenO = Tween(Joint, "C0", newC0, Alpha, Duration, true, function(status)
+							local s0 = status
+							if not ignoreRepl and tick() - t0 <= Duration then
+								Joint.C0 = newC0 
+							end
+							if s0 == Enum.TweenStatus.Completed then
+								if action and (not newC1) then action() end
+							end
+						end)
+					else
+						local tweenO = Tween(Joint, "C0", newC0, Alpha, Duration, false, function(status)
+							local s0 = status
+							if not ignoreRepl and tick() - t0 <= Duration then
+								Joint.C0 = newC0 
+							end
+						end)
+					end
+				end
+				if newC1 then
+					local t0 = tick()
+					if Joint.Name ~= "BoltWeld" then
+						local tweenO = Tween(Joint, "C1", newC1, Alpha, Duration, true, function(status)
+							local s0 = status
+							if not ignoreRepl and tick() - t0 <= Duration then
+								Joint.C1 = newC1 
+								RemoteService.send("Server","SetJointC1",Joint,Joint.C1)
+							end
+							if s0 == Enum.TweenStatus.Completed then
+								if action and (not newC0) then action() end
+							end
+						end)
+					else
+						local tweenO = Tween(Joint, "C1", newC1, Alpha, Duration, false, function(status)
+							local s0 = status
+							if not ignoreRepl and tick() - t0 <= Duration then
+								Joint.C1 = newC1 
+								RemoteService.send("Server","SetJointC1",Joint,Joint.C1)
+							end
+						end)
+					end
+
+				end
+			end
+		end)
+		if not ignoreRepl then		
+			RemoteService.sendU("Server","SignalTween",Joint,newC0 or false,newC1 or false,getAlphaName(Alpha),Duration)	
+		end
+	end)
+	RemoteService.listenU("Client","Bounce","TweenJoint",function(joint,newC0,newC1,alphaName,duration)
+		local alpha = getAlpha(alphaName)
+		tween("Joint",joint,newC0,newC1,alpha,duration,false,true)
+	end)
+end
+
+-------
 player.CharacterAdded:Connect(function(ch)
     Character = ch
 	Humanoid = Character:WaitForChild("Humanoid", 20)
@@ -147,12 +263,31 @@ player.CharacterAdded:Connect(function(ch)
 	end))
 	InputComp.CharacterController:Enable(true)
 end)
-player.CharacterRemoving:Connect(function(c)
-	for _, conn in Connections do
-		conn:Disconnect()
+player.DescendantRemoving:Connect(function(c)
+	if c == Character then
+		if (not c.Parent) then --or c.Parent == workspace.CorpseIgnore then
+
+			for i, conn in Connections do
+				conn:Disconnect()
+				Connections[i] = nil
+			end
+		
+			for _, pluginObj in ClientPlugins do
+				pluginObj.OnCharacterRemoving({
+					CharacterJanitor = Jan_Char;
+					RS = RunService;
+					ViewModel = ViewModel;
+					taskSpawn = runAsync;
+					CharState = CharState;
+					RemoteService = RemoteService;
+					DepthOfField = game.Lighting.ItemDepth;
+				}, Components)
+			end
+
+			table.clear(Connections)
+			InputComp.CharacterController:Enable(false)
+		end
 	end
-	table.clear(Connections)
-	InputComp.CharacterController:Enable(false)
 end)
 ----- Keybinds ------
 local Jan = Janitor.new()
@@ -205,10 +340,24 @@ local function UpdateKeys()
 		InputComp.CharacterController:SetInput(k,v)
 	end
 end
-fastSpawn(function()
+do
 	InputComp.SetupCharacter()
 
 	Components.Input = InputComp
 	Components.Camera = CameraService
+	Components.Lighting = PhotoSiris
 	UpdateKeys()
-end)
+
+	for _, pl in ClientPlugins do
+		if pl.Init then
+			pl.Init({
+				Lerps = Lerps;
+				V3 = V3;
+				RNG = RNG;
+				Enumeration = Enumeration;
+				ClientSettings = ClientSettings;
+				Events = EventUtils;
+			}, Components)
+		end
+	end
+end

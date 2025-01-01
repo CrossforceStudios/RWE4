@@ -15,6 +15,15 @@ return function(ei)
         end
     end
     
+    local function installWorkspaceInsert(insert, parent)
+        local folder = insert
+        if folder then
+            if parent:IsDescendantOf(workspace) then
+                folder:Clone().Parent = parent
+            end
+        end
+    end
+    
 
     installService("ReplicatedStorage")
     installService("ServerStorage")
@@ -47,6 +56,21 @@ return function(ei)
         end
     end)
     installService("Workspace")
+    local Lighting = game:GetService("Lighting") do
+        if Lighting:FindFirstChild("SunRays") then
+            Lighting.SunRays.Name = "SunLight"
+            Lighting.SunLight.Intensity = 0.06;
+            Lighting.SunLight.Spread = 0.1;
+
+            local sunL = Lighting.SunLight:Clone() do
+                sunL.Name = "SunLightFar" 
+                sunL.Parent = Lighting
+                sunL.Intensity =  0.01
+            end
+        end
+        installService("Lighting")
+    end
+
     local Teams = game:GetService("Teams") do
         local t1 = Instance.new("Team")
         t1.Name = "Red Team"
@@ -64,7 +88,10 @@ return function(ei)
         Players.CharacterAutoLoads = false
     end
 
+    installWorkspaceInsert(ei.WorkspaceInserts.Terrain.Clouds, workspace.Terrain)
+
     local ChangeHistoryService = game:GetService("ChangeHistoryService") do
         ChangeHistoryService:SetWaypoint("Install RWE4 Framework")
     end
+
 end
