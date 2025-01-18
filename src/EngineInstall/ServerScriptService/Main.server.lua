@@ -14,6 +14,7 @@ local EventSystem = Resources:LoadLibrary("EventUtils")
 local createViewModel = Resources:LoadLibrary("createViewModel")
 local FactionService = Resources:LoadLibrary("FactionService")
 local PhotoSiris = Resources:LoadLibrary("PhotoSiris")
+local FastDelay = Resources:LoadLibrary("FastDelay")
 
 -- Event System
 local ServerSettings = require(script.Parent.ServerSettings)
@@ -103,6 +104,20 @@ RemoteService.listen("Server","Send","SetAJointC0",function(player,Joint,JC0)
 			end
 		end
 	end)
+end)
+RemoteService.listenU("Server","Send","SignalTween",function(player,Joint,newC0,newC1,aName,Duration)
+	if Joint then
+		RemoteService.bounceOthersU("Client",player,"TweenJoint",Joint,newC0,newC1,aName,Duration)
+		FastDelay(Duration,function()
+			if newC0 then
+				Joint.C0 = newC0
+			end
+			if newC1 then
+				Joint.C1 = newC1
+			end
+		end)	
+	end
+
 end)
 RemoteService.listen("Server","Send","SetAJointC1",function(player,Joint,JC1)
 	pcall(function()

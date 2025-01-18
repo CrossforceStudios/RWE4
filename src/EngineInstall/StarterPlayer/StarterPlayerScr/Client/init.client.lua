@@ -5,7 +5,35 @@ local Players = game:GetService("Players")
 local player = Players.LocalPlayer
 local Components = Resources:GetLocalTable("Components")
 Resources:AddComponent("Tweener", Resources:LoadLibrary("TweenHandler")())
-print(Components.Tweener)
+--- math constants
+local RAD = math.rad
+local COS = math.cos;
+local SIN = math.sin;
+local ABS = math.abs
+local C3RGB = Color3.fromRGB
+local OBJ = Instance.new
+local CF = {
+	RAW = CFrame.new,
+	ANG = CFrame.Angles,
+	ID = CFrame.new();
+	Inverse = CFrame.new().inverse,
+	TOS = CFrame.new().toObjectSpace;
+	Cache = {};
+} do
+	CF.FAxAR = CFrame.fromAxisAngle
+	CF.FAxA = function(x,y,z)
+		if not y then
+			x,y,z=x.x,x.y,x.z
+		end
+		local m=(x*x+y*y+z*z)^0.5
+		if m>1e-5 then
+			local si=SIN(m/2)/m
+			return CF.RAW(0,0,0,si*x,si*y,si*z,COS(m/2))
+		else
+			return CF.ID
+		end
+	end
+end
 -- ClientPlugins Loading
 local ClientPlugins = {} do
 	for i, pl: ModuleScript in script.Plugins:GetDescendants() do
@@ -21,10 +49,15 @@ Resources:SetupFlags({
 local Character = nil;
 local Humanoid = nil;
 local CharacterParts = {};
+local CharacterJoints = {
+	Shoulders = {};
+	Hips = {};
+};
 
 _G.CharacterStance = {};
 local CharState = {};
 -- Necessary Modules
+local Enumeration = Resources:LoadLibrary("Enumeration")
 local RemoteService = Resources:LoadLibrary("RemoteService")
 local CameraService = Resources:LoadLibrary("CameraService")
 local PseudoInstance = Resources:LoadLibrary("PseudoInstance")
@@ -34,8 +67,11 @@ local Janitor = Resources:LoadLibrary("Janitor")
 local removeElement = Resources:LoadLibrary("removeElement")
 local PhotoSiris = Resources:LoadLibrary("PhotoSiris")
 local Lerps = Resources:LoadLibrary("Lerps")
-local Enumeration = Resources:LoadLibrary("Enumeration")
 local EventUtils = Resources:LoadLibrary("EventUtils")
+local Spring = Resources:LoadLibrary("Spring")
+local Tween = Resources:LoadLibrary("Tween")
+local AndList = Resources:LoadLibrary("AndList")
+local FastWait = Resources:LoadLibrary("FastWait")
 
 -- Shortcuts
 local VEC2 = Vector2.new
@@ -70,9 +106,21 @@ local ViewModel = {
 		Current = "Right";
 	};
 }
+local function getAlpha(easing)
+	return Enumeration.EasingFunction[easing].Value
+end
 ---------
 do 
-	local stances = ClientSettings.Stances;
+	local stances = {} do
+		for k, stance in ClientSettings.Stances do
+			if stance.Value then
+				if typeof(stance.Value) == "number" then
+					stances[k] = stance.Value
+				end
+			end
+		end
+	end
+	local disabledStances = {};
 	local Stance = 0;
 	local stanceSway = 1	
 	local stanceTrans = false
@@ -121,6 +169,57 @@ do
 
 		stanceTrans = false
 	end;
+
+
+	CharState = setmetatable(CharState, {
+		__index = function(self,k)
+			local key = k:lower()
+			if key == "stance" then
+				return Stance
+			--[[elseif key == "currentstate" then
+				return currentState]]--
+			elseif key == "stanceblacklist" then
+				return disabledStances
+			elseif key == "stancetrans" then
+				return stanceTrans
+			elseif key == "lean" then
+				return Lean
+			elseif key == "movedirection" then
+				return Humanoid.MoveDirection
+			else
+				return nil;
+			end
+		end;
+		__newindex  = function(self,k,v)
+			local key = k:lower()
+			if key == "walkspeed"  then
+				walkSpeedSpring.g = v
+			elseif  key == "crawlcamrot" then
+				crawlCamRot = v
+			elseif key == "bws" then
+				bWS = v;
+			elseif key == "stance" then
+				Stance = v 
+			elseif key == "grounded" then
+				onGround = v
+			--[[elseif key == "currentstate" then
+				currentState = v
+				if CurrentItem.Value then
+					CharState:chooseWalkAnim()
+				end]]--
+			elseif key == "stancesway" then
+				stanceSway = v
+			elseif key == "stanceblacklist" then
+				disabledStances = v
+			elseif key == "leananim" then
+				leanAnim = v;
+			elseif key == "lean" then
+				Lean = v
+			elseif key == "leananim" then
+				return leanAnim
+			end
+		end
+	})
 end
 ---------
 CameraService:startClient()
@@ -221,13 +320,25 @@ RemoteService.listen("Client","Send","SetGripsClient",function(grips)
 	ViewModel.Grips.Left = grips[2]
 end)
 do 
+	function getAlphaName(alpha)
+		local compName ="";
+		for  n, EnumName in ipairs(Enumeration.EasingFunction:GetEnumerationItems()) do
+			if alpha == EnumName.Value then
+				compName = EnumName.Name
+				break
+			end
+		end				
+
+
+		return compName
+	end
 	local tween = Resources:GetComponent("Tweener")
 	tween:addTweenFunction("Joint", function(Joint,newC0,newC1,Alpha,Duration,isBlade,ignoreRepl,action)
 		if not Joint then return end
 		if typeof(Alpha) == "string" then 
 			Alpha = getAlpha(Alpha)
 		end
-		runAsync(function()
+		task.spawn(function()
 			if Duration <= 0 then
 				if not ignoreRepl then
 					if newC0 then
@@ -328,20 +439,29 @@ player.DescendantRemoving:Connect(function(c)
 		if (not c.Parent) then --or c.Parent == workspace.CorpseIgnore then
 
 			for i, conn in Connections do
-				conn:Disconnect()
-				Connections[i] = nil
+				if typeof(conn) == "RBXScriptConnection" then
+					conn:Disconnect()
+					Connections[i] = nil
+				end
 			end
-		
+
+			--removeElement(Ignore,Character);
+
+
 			for _, pluginObj in ClientPlugins do
-				pluginObj.OnCharacterRemoving({
-					CharacterJanitor = Jan_Char;
-					RS = RunService;
-					ViewModel = ViewModel;
-					taskSpawn = runAsync;
-					CharState = CharState;
-					RemoteService = RemoteService;
-					DepthOfField = game.Lighting.ItemDepth;
-				}, Components)
+				if pluginObj.OnCharacterRemoving then
+					pluginObj.OnCharacterRemoving({
+						CharacterJanitor = Jan_Char;
+						RS = RunService;
+						ViewModel = ViewModel;
+						taskSpawn = runAsync;
+						CharState = CharState;
+						RemoteService = RemoteService;
+						DepthOfField = game.Lighting.ItemDepth;
+						ClientSettings = ClientSettings;
+					}, Components)
+				end
+				
 			end
 
 			table.clear(Connections)
@@ -352,24 +472,54 @@ end)
 ----- Keybinds ------
 local Jan = Janitor.new()
 local function UpdateGeneralKeys()
-	InputComp.RegisterSchemeAction("General","Crouch",{InputComp:GetBindCode("Core","Crouch") or Enum.KeyCode.C},false,function(input,gp)
-		--if _G.HM.Context == "Build" then return end						
-		if not CurrentItem:IsPlayingAnim() then
-			if not Humanoid.Sit then
-				if CharState.currentState ~= "Running" then 															
-					if CharState.Stance ~= CharState:getStanceIndex("Crouch") then
-						if  (not table.find(CharState.StanceBlacklist,"Crouch"))  then
-							CharState:changeStance("Crouch")
-						end
-					else
-						CharState:changeStance("Stand")
-					end
-				end
-			end
+	local basicMode = {
+		"ADS";
+		"Stance";
+		"Sprint";
+		"Orders";
+		"Exit";
+		"Menu";	
+	};
+	for k, stance in ClientSettings.Stances do
+		if  AndList({stance.Enabled;stance.HasAction;}) then
+			table.insert(basicMode, k)	
 		end
-		_G.CharacterStance[Humanoid] = CharState.Stance
+	end
+	InputComp.SetupGeneralIScheme({
+		{
+			"Basic";
+			basicMode;
+		},
+		{
+			"Specials";
+			{
 
-	end,true,1)	
+				"Trait";
+				"CallMedic";
+				"SpotContact";
+			}
+
+		}
+	})	
+	for k, stance in ClientSettings.Stances do
+		if  AndList({stance.Enabled;stance.HasAction;}) then
+			InputComp.RegisterSchemeAction("General",k,{stance.Input or InputComp:GetBindCode("Core",k)},false,function(input,gp)
+				if stance.OnActivate then
+					stance.OnActivate(input,gp, {
+						Humanoid = Humanoid;
+						CharState = CharState;
+						CurrentItem = CurrentItem;
+						InputComp = InputComp;
+						Components = Components;
+						setStanceDir = function(dir)
+							stanceDir = dir
+						end,
+						WeaponUtils = WeaponUtils;
+					})
+				end
+			end,true,1)		
+		end
+	end
 	local function lookAround(pos,noDeg,gamepad)
 		if  CameraService.CurrentCamMode then 
 			if Character then
@@ -404,7 +554,16 @@ local function UpdateGeneralKeys()
 
 	Jan:Add(InputComp.RegisterSchemeAxis("General","LookKeyboard",Enum.UserInputType.MouseMovement,"Rotation",Enum.KeyCode.Unknown):Connect(function(i,pos)
 		lookAround(pos)
-	end),"Disconnect")	
+	end),"Disconnect")
+	for _, pl in ClientPlugins do
+		if pl.DefineGeneralInput then
+			pl.DefineGeneralInput({
+				Events = EventUtils;
+				CharState  = CharState;
+				
+			}, Components)
+		end
+	end	
 end;
 local function UpdateKeys()
 	UpdateGeneralKeys()
@@ -435,6 +594,13 @@ do
 				Enumeration = Enumeration;
 				ClientSettings = ClientSettings;
 				Events = EventUtils;
+				PseudoInstance = PseudoInstance;
+				CFFAxA = CF.FAxA;
+				CollectionService = game:GetService("CollectionService");
+				addComponent = function(name, component)
+					Resources:AddComponent(name, component)
+					return Resources:GetComponent(name)
+				end,
 			}, Components)
 		end
 	end
