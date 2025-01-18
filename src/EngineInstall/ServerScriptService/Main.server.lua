@@ -87,7 +87,34 @@ function runInit(plr: Player)
 end
 EventSystem:ConnectEvent("PlayerAdded", runInit)
 -----
-
+RemoteService.listen("Server","Send","SetJointC0",function(player,Joint,JC0,set)
+	pcall(function() if Joint then 	if  Joint.Part0 then  if (Joint.Part0:GetNetworkOwner() == player or table.find(jointIgnore,Joint.Name)) then	   Joint.C0 = JC0  end end end end)
+end)
+RemoteService.listen("Server","Send","SetJointC1",function(player,Joint,JC1,set)
+	pcall(function() if Joint then if Joint.Part1 then if (Joint.Part1:GetNetworkOwner() == player or table.find(jointIgnore,Joint.Name)) then Joint.C1 = JC1   end end end end)
+end)
+RemoteService.listen("Server","Send","SetAJointC0",function(player,Joint,JC0)
+	pcall(function()
+		if Joint then
+			if Joint.Part0 then
+				if Joint.Part0:GetNetworkOwner() == player and Joint.Name == "animWeld" then 
+					Joint.C0 = JC0
+				end
+			end
+		end
+	end)
+end)
+RemoteService.listen("Server","Send","SetAJointC1",function(player,Joint,JC1)
+	pcall(function()
+		if Joint then
+			if Joint.Part1 then
+				if Joint.Part1:GetNetworkOwner() == player and Joint.Name == "animWeld" then 
+					Joint.C1 = JC1
+				end
+			end
+		end
+	end)
+end)
 -----
 Players.PlayerAdded:Connect(function(plr)
 	EventSystem:FireEvent("PlayerAdded", plr)

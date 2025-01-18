@@ -23,6 +23,7 @@ local Humanoid = nil;
 local CharacterParts = {};
 
 _G.CharacterStance = {};
+local CharState = {};
 -- Necessary Modules
 local RemoteService = Resources:LoadLibrary("RemoteService")
 local CameraService = Resources:LoadLibrary("CameraService")
@@ -69,6 +70,58 @@ local ViewModel = {
 		Current = "Right";
 	};
 }
+---------
+do 
+	local stances = ClientSettings.Stances;
+	local Stance = 0;
+	local stanceSway = 1	
+	local stanceTrans = false
+	local leanAnim = {
+		Pos = Spring.new(0.8,16,0);
+		Rot = 0;
+		Change = false;
+		Factor  = ClientSettings.LeanAngle or RAD(15);
+	};
+	CharState.getStanceIndex = function(self,stance)
+		return stances[stance]
+	end
+
+	CharState.changeStance = function(self,stance,lean,silent)
+		local tween = Resources:GetComponent("Tweener")
+		local pssW = stanceSway
+		local stanceTme = 0.5
+		if (not lean) and (not silent) then
+			RemoteService.send("Server","SignalChangeStance", stance)
+		end
+		UP_RATE = 0.06
+		stance = typeof(stance) == "number" and getStance(stance) or stance
+		stanceTrans = true
+		if lean then
+			CharacterJoints.Hips.Left.C1 = ClientSettings.StanceCF.leg.C1[stance][1] * CF.ANG(0, -leanAnim.Rot * RAD(-90), 0)
+			CharacterJoints.Hips.Right.C1 =  ClientSettings.StanceCF.leg.C1[stance][2] * CF.ANG(0, -leanAnim.Rot * RAD(90), 0)
+			CharacterJoints.Root.C0 = ClientSettings.StanceCF.HRP[stance]  * CF.ANG(0,-leanAnim.Rot * leanAnim.Factor,0)
+			stanceTrans = false
+			return
+		end
+
+		Tween.new(stanceTme, getAlpha("OutQuad"), "stanceSway", true, function(x)
+			stanceSway  = Lerps.number(pssW,(1 - (stances[stance] * 0.25)),x)
+		end)
+		tween("Joint",ViewModel.ABWeld, ClientSettings.StanceCF.arm[stance], false, getAlpha("OutQuad"), stanceTme)
+		tween("Joint",CharacterJoints.Hips.Left, ClientSettings.StanceCF.leg.C0[stance][1], ClientSettings.StanceCF.leg.C1[stance][1], getAlpha("OutQuad"),  stanceTme)
+		tween("Joint",CharacterJoints.Hips.Right, ClientSettings.StanceCF.leg.C0[stance][2], ClientSettings.StanceCF.leg.C1[stance][2], getAlpha("OutQuad"),  stanceTme)
+		tween("Joint",CharacterJoints.Root, ClientSettings.StanceCF.HRP[stance], false, getAlpha("OutQuad"),  stanceTme)
+		if stance == "Prone" or stance == "ProneBack" then
+			FastWait(stanceTme/2)
+		end
+		tween("Joint",ViewModel.headWeld, ClientSettings.StanceCF.head[stance], false, getAlpha("OutQuad"),  stanceTme)
+		FastWait(stanceTme)
+		CharState.Stance = stances[stance]
+		UP_RATE = 0.1
+
+		stanceTrans = false
+	end;
+end
 ---------
 CameraService:startClient()
 local soundUpdate do
@@ -248,8 +301,15 @@ end
 player.CharacterAdded:Connect(function(ch)
     Character = ch
 	Humanoid = Character:WaitForChild("Humanoid", 20)
+	CharacterParts.Torso = Character:WaitForChild("Torso",200)
     CharacterParts.Head = ch:WaitForChild("Head", 20)
 	CharacterParts.HRP = Character.PrimaryPart
+	CharacterJoints.Root = CharacterParts.HRP:WaitForChild("RootJoint",200)
+	CharacterJoints.Neck = CharacterParts.Torso:WaitForChild("Neck",200)
+	CharacterJoints.Hips.Left = CharacterParts.Torso:WaitForChild("Left Hip",200)
+	CharacterJoints.Hips.Right = CharacterParts.Torso:WaitForChild("Right Hip",200)
+	CharacterJoints.Shoulders.Left = CharacterParts.Torso:WaitForChild("Left Shoulder",200)
+	CharacterJoints.Shoulders.Right = CharacterParts.Torso:WaitForChild("Right Shoulder",200)
 	player.CameraMode = Enum.CameraMode.LockFirstPerson
 	InputComp.ToggleMouseControl(false, InputComp.Platform ~= "Touch")
     CharacterParts.ASM = Resources:LoadLibrary("AnimateHelper")(Character)
@@ -292,6 +352,24 @@ end)
 ----- Keybinds ------
 local Jan = Janitor.new()
 local function UpdateGeneralKeys()
+	InputComp.RegisterSchemeAction("General","Crouch",{InputComp:GetBindCode("Core","Crouch") or Enum.KeyCode.C},false,function(input,gp)
+		--if _G.HM.Context == "Build" then return end						
+		if not CurrentItem:IsPlayingAnim() then
+			if not Humanoid.Sit then
+				if CharState.currentState ~= "Running" then 															
+					if CharState.Stance ~= CharState:getStanceIndex("Crouch") then
+						if  (not table.find(CharState.StanceBlacklist,"Crouch"))  then
+							CharState:changeStance("Crouch")
+						end
+					else
+						CharState:changeStance("Stand")
+					end
+				end
+			end
+		end
+		_G.CharacterStance[Humanoid] = CharState.Stance
+
+	end,true,1)	
 	local function lookAround(pos,noDeg,gamepad)
 		if  CameraService.CurrentCamMode then 
 			if Character then

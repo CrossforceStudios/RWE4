@@ -35,6 +35,12 @@ return {
 		LayerSpacing = 1;
 		Transparency = 0.996;
 	};
+	Stances = {
+		Stand = 0;
+		Crouch = 1;
+		Prone = 2;
+	};
+	LeanAngle = math.rad(15);
 	MovementMap = {
 		[Enum.PlayerActions.CharacterForward] = Enum.KeyCode.W;
 		[Enum.PlayerActions.CharacterBackward] = Enum.KeyCode.S;
