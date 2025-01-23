@@ -1,5 +1,6 @@
-return function(ei)
+return function(RWE4, ei)
     print("Installing RWE4...")
+    local record = RWE4:RecordHistory("EngineInstaller", "Install")
     local function installService(name, processFunc)
         local folder = ei:FindFirstChild(name)
         if name then
@@ -90,8 +91,6 @@ return function(ei)
 
     installWorkspaceInsert(ei.WorkspaceInserts.Terrain.Clouds, workspace.Terrain)
 
-    local ChangeHistoryService = game:GetService("ChangeHistoryService") do
-        ChangeHistoryService:SetWaypoint("Install RWE4 Framework")
-    end
-
+    RWE4:CommitRecord(record)
+   
 end

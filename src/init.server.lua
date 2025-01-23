@@ -29,6 +29,7 @@ local RBLXGUI = require(script.Libraries.rblxgui.initialize)(plugin, "rblxgui")
 RWE4.Toolbar = Plugin:CreateToolbar("RW Engine 4")
 RWE4.Buttons = {};
 RWE4.Maid = Maid.new()
+RWE4.CurrentModule = "None";
 function RWE4:addButton(name, title, desc, icon)
 	RWE4.Buttons[name] = RWE4.Toolbar:CreateButton(title, desc, icon)
 end
@@ -45,6 +46,32 @@ function RWE4:CloneAsset(name)
 		return asset
 	end
 end;
+function RWE4:SetModuleSetting(Module,Key,Value)
+	local tab = Plugin:GetSetting(("RWE4_%s"):format(Module))
+	if not tab then
+		tab = {};
+	end
+	tab[Key] = Value
+	Plugin:SetSetting(("RWE4_%s"):format(Module), tab)
+end
+
+function RWE4:GetModuleSetting(Module,Key,Default)
+	local tab = Plugin:GetSetting(("RWE4_%s"):format(Module))
+	if tab then
+		if (not tab[Key]) and Default then
+			tab[Key] = Default;
+			Plugin:SetSetting(("RWE4_%s"):format(Module), tab)
+		end
+	
+		return tab[Key]
+	else
+		tab = {};
+		tab[Key] = Default
+		Plugin:SetSetting(("RWE4_%s"):format(Module), tab)
+
+		return Default
+	end
+end
 function RWE4:getTemplatedSource(templateName, params)
 	local templateScript = script.Templates:FindFirstChild(templateName)
 	if templateScript then
@@ -57,6 +84,34 @@ function RWE4:getTemplatedSource(templateName, params)
 end;
 function RWE4:OpenScript(script2: LuaSourceContainer)
 	return ScriptEditorService:OpenScriptDocumentAsync(script2)
+end
+function RWE4:AddConnection(c)
+	return self.Maid:AddTask(c)
+end
+--- Progress Bar
+local PBar
+function Editor:ToggleProgress(on)
+	PBar:TweenPosition(on and PROGRESS_OUT or PROGRESS_IN, Enum.EasingDirection.InOut, Enum.EasingStyle.Back, 1, false)
+	wait(1)
+end
+function Editor:SetStatus(status)
+	if PBar then
+		PBar.Status.Text = status:upper()
+	end
+end
+function Editor:SetPercent(percent)
+	if PBar then
+		local intPercent = math.floor(percent * 100)
+		PBar.ProgressFrame.Fill.Size = UDim2.fromScale(percent,1)
+		PBar.ProgressFrame.Progress.Text = ("%i%%"):format(intPercent)
+	end
+end
+--- History 
+function Editor:RecordHistory(module,key)
+	return ChangeHistoryService:TryBeginRecording("RWE4_Change_"..module.."_"..key)
+end
+function Editor:CommitRecord(record)
+	return ChangeHistoryService:FinishRecording(record, Enum.FinishRecordingOperation.Commit)
 end
 --- Themes
 RWE4.ThemeChanged = Signal.new()
@@ -77,6 +132,10 @@ do
 	)
 	RWE4.ModuleWindow = Plugin:CreateDockWidgetPluginGui("RWE4_ModuleWindow", RWE4.ModulesWindowData)
 	RWE4.ModuleWindow.Title = "RWE4 [Main Menu]";
+	RWE4.CoreWorkspace = Instance.new("ScreenGui")
+	RWE4.CoreWorkspace.Name = "RWE4CoreWorkspace"
+	RWE4.CoreWorkspace.Parent = CoreGui
+	RWE4.CoreWorkspace.Enabled = true
 	local function createModuleFrame(window)
 		local ScrollWindow = SW.VerticalScrollingGridFrame.new("rwe4Modules_",Color3.fromRGB(25,25,25))
 		ScrollWindow:GetSectionFrame().Parent  = window
@@ -89,6 +148,8 @@ do
 		return ScrollWindow:GetContentsFrame()
 	end
 	local grid = createModuleFrame(RWE4.ModuleWindow)
+	PBar = script.CoreAssets.ModuleProgress.Progress:Clone()
+	PBar.Parent = RWE4.CoreWorkspace
 	RWE4:addButton("StartRWE4", "Start RWE4 (Editor)", "Sets up the editor (this plugin) for the first time, then opens the main menu.", "rbxassetid://2778270261")
 	RWE4:addClickHandler("StartRWE4", function()
 		print("[RWE4]: Starting RW Engine...")
@@ -111,6 +172,7 @@ do
 					if data.OnSelect then
 						data.OnSelect(i)
 					end
+					RWE4.CurrentModule = model.Name
 				end))
 				if data.Unload then
 					moduleUnloaders[#moduleUnloaders+1] = {

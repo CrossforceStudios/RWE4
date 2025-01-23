@@ -19,7 +19,7 @@ return function(RWE4,Plugin,EditorLibraries,Libraries,loader,RBLXGUI,EI)
 	local window = RWE4:CloneAsset("InstallerWindow")
 	window.Parent = pageInstall.Content
 	RWE4.Maid:AddTask(window.InstallButton.Activated:Connect(function()
-		installRWE4(EI)
+		installRWE4(RWE4, EI)
 	end))
     local function openInstaller()
 		installerUI.Content.Enabled = true
