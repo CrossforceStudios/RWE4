@@ -90,16 +90,19 @@ function RWE4:AddConnection(c)
 end
 --- Progress Bar
 local PBar
-function Editor:ToggleProgress(on)
+local PROGRESS_OUT = UDim2.fromScale(.5,.9)
+local PROGRESS_IN = UDim2.fromScale(.5,1.1)
+
+function RWE4:ToggleProgress(on)
 	PBar:TweenPosition(on and PROGRESS_OUT or PROGRESS_IN, Enum.EasingDirection.InOut, Enum.EasingStyle.Back, 1, false)
 	wait(1)
 end
-function Editor:SetStatus(status)
+function RWE4:SetStatus(status)
 	if PBar then
 		PBar.Status.Text = status:upper()
 	end
 end
-function Editor:SetPercent(percent)
+function RWE4:SetPercent(percent)
 	if PBar then
 		local intPercent = math.floor(percent * 100)
 		PBar.ProgressFrame.Fill.Size = UDim2.fromScale(percent,1)
@@ -107,10 +110,11 @@ function Editor:SetPercent(percent)
 	end
 end
 --- History 
-function Editor:RecordHistory(module,key)
+local ChangeHistoryService = game:GetService("ChangeHistoryService")
+function RWE4:RecordHistory(module,key)
 	return ChangeHistoryService:TryBeginRecording("RWE4_Change_"..module.."_"..key)
 end
-function Editor:CommitRecord(record)
+function RWE4:CommitRecord(record)
 	return ChangeHistoryService:FinishRecording(record, Enum.FinishRecordingOperation.Commit)
 end
 --- Themes
@@ -134,7 +138,7 @@ do
 	RWE4.ModuleWindow.Title = "RWE4 [Main Menu]";
 	RWE4.CoreWorkspace = Instance.new("ScreenGui")
 	RWE4.CoreWorkspace.Name = "RWE4CoreWorkspace"
-	RWE4.CoreWorkspace.Parent = CoreGui
+	RWE4.CoreWorkspace.Parent = game.CoreGui
 	RWE4.CoreWorkspace.Enabled = true
 	local function createModuleFrame(window)
 		local ScrollWindow = SW.VerticalScrollingGridFrame.new("rwe4Modules_",Color3.fromRGB(25,25,25))
@@ -197,6 +201,10 @@ do
 		end
 		print("[RWE4]: Modules and Engine Loaded...")
 		RWE4.ModuleWindow.Enabled = true
+	end)
+
+	Plugin.Unloading:Connect(function()
+		RWE4.CoreWorkspace:Destroy()
 	end)
 end
 
