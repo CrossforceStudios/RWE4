@@ -1,30 +1,30 @@
 -- Description:
 
-	-- A Module which heavily relies on 
-	-- script.AnimationValues to retrieve
-	-- animations and play them.
-	
-	-- This is a modularized version of the Animate
-	-- script in the Character.  I made this
-	-- so you won't have to copy the Animate script
-	-- and edit it.  You can do a lot by script
-	-- (see ConfigureWalkAnimation [EXAMPLE])
-	
+-- A Module which heavily relies on 
+-- script.AnimationValues to retrieve
+-- animations and play them.
+
+-- This is a modularized version of the Animate
+-- script in the Character.  I made this
+-- so you won't have to copy the Animate script
+-- and edit it.  You can do a lot by script
+-- (see ConfigureWalkAnimation [EXAMPLE])
+
 
 -- TODO:
-	--2. FIX EMOTE CODE; SOMETIMES ERRORS 
-	--	 (PROBABLY NOT DO THIS SINCE THERE 
-	--   WILL MAY BE AN EMOTE WHEEL).
-	--3. TOO MANY FUNCTIONS, SOON, I WILL DOCUMENT
-	--4. MAKE MODULE COMPATIBLE WITH 
-	--   NON-CHARACTERS.
-	--6. TOOLS ACT A LITTLE WEIRD, BUT THEY DO
-	--   THEIR JOB
+--2. FIX EMOTE CODE; SOMETIMES ERRORS 
+--	 (PROBABLY NOT DO THIS SINCE THERE 
+--   WILL MAY BE AN EMOTE WHEEL).
+--3. TOO MANY FUNCTIONS, SOON, I WILL DOCUMENT
+--4. MAKE MODULE COMPATIBLE WITH 
+--   NON-CHARACTERS.
+--6. TOOLS ACT A LITTLE WEIRD, BUT THEY DO
+--   THEIR JOB
 -- COMPLETE:
-	--1. FIX ERRORS WITH self.lastTick.
-	--5. SOMETIMES FREE-FALL ANIMATION DOES
-	--   NOT WORK.
-	
+--1. FIX ERRORS WITH self.lastTick.
+--5. SOMETIMES FREE-FALL ANIMATION DOES
+--   NOT WORK.
+
 -- Constant Values
 
 
@@ -39,29 +39,31 @@ local WPF = Resources:LoadLibrary("WeightedProbabilityFunction")
 local AnimationValues = require(script:WaitForChild("AnimationValues"))
 local fastSpawn = Resources:LoadLibrary("FastSpawn")
 local globalAnimation = Instance.new("Animation")
+local player = game.Players.LocalPlayer
 local Animate = PseudoInstance:Register("Animate",{
-	
+
 	Internals = {
 		"currentAnimInstance";
 		"currentAnimTrack";
 		"animTable";
 		lastTick = 0;
 		animNames = AnimationValues.animNames.R6;
+		animNamesSpecial = AnimationValues.animNames.R6_Special;
 		runningFunctionIf   = function(self, speed)
 			if self.Figure:GetAttribute("Sprinting") then
-				if self.Figure:FindFirstAncestor("Mobs") then
+				if  (self.Figure:FindFirstAncestor("Mobs") or self.Figure ~= player.Character) then
 					self:stopToolAnimations()
 				end
 				self:playAnimation("run", 0.1, self.Humanoid)
 				self.CurrentAnimSpeed = speed / 22.5
 			else
-				if self.Figure:FindFirstAncestor("Mobs") and self.toolAnim == "None" then
+				if  (self.Figure:FindFirstAncestor("Mobs") or self.Figure ~= player.Character) and self.toolAnim == "None" then
 					self:playToolAnimation("toolnone", self.toolTransitionTime, self.Humanoid, Enum.AnimationPriority.Idle)
 				end
 				self:playAnimation("walk", 0.1, self.Humanoid)
 				self.CurrentAnimSpeed = speed / 14.5
 			end
-			
+
 		end;
 		runningFunctionElse = function(self)
 			self:playAnimation("idle", 0.1, self.Humanoid)
@@ -87,17 +89,17 @@ local Animate = PseudoInstance:Register("Animate",{
 					end
 				end
 			end
-			
+
 			return nil
 		end;
-		
+
 		getToolAnim = function(self,tool)
 			for _, child in ipairs(tool:GetChildren()) do
 				if child.Name == "toolanim" and child:IsA("StringValue") then
 					return child
 				end
 			end
-			
+
 			return
 		end;
 		animateTool = function(self)
@@ -107,7 +109,7 @@ local Animate = PseudoInstance:Register("Animate",{
 			end
 		end;	
 	};
-	
+
 	Properties = {
 		Torso = Typer.OptionalInstanceWhichIsABasePart;
 		Humanoid = Typer.InstanceOfClassHumanoid;
@@ -128,7 +130,7 @@ local Animate = PseudoInstance:Register("Animate",{
 		end);
 
 	};
-	
+
 	Methods = {
 		GetLastTick = function(self)
 			return self.lastTick
@@ -136,7 +138,7 @@ local Animate = PseudoInstance:Register("Animate",{
 		RandomInt = function(self, a, b)
 			return Random.new(tick()):NextInteger(a, b)
 		end;
-		
+
 		EndCurrentAnimTrack = function(self,TransitionTime)
 			-- A function which ends the current
 			-- animation
@@ -152,36 +154,36 @@ local Animate = PseudoInstance:Register("Animate",{
 			if self.animTable[name] then
 				return
 			end
-			
+
 			globalAnimation	= Instance.new("Animation")
 
-			
+
 			self.animTable[name] = {}
 			self.animTable[name].count = 0
 			self.animTable[name].totalWeight = 0	
-			
+
 			self.animTable[name].getTotalWeight = function(self)
 				return self.totalWeight
 			end
 			self.animTable[name].getCount = function(self)
 				return self.count
 			end
-			
+
 			-- fallback to defaults
 			if self.animTable[name].count <= 0 then
-				local weightFinder = {}
-				for idx, anim in pairs(fileList) do
+				local weightFinder = {}					
+				for idx, anim in (fileList) do
 					globalAnimation.AnimationId = anim.id
-					
-					
-		--			print(idx, anim)
+
+
+					--			print(idx, anim)
 					self.animTable[name].anims = {};
 					self.animTable[name].anims[idx] = {}
 					self.animTable[name].anims[idx].anim  = self.Animator:LoadAnimation(globalAnimation)
 					if anim.priority then
 						self.animTable[name].anims[idx].anim.Priority = anim.priority
 					end
-					if anim.aipriority and self.Figure:FindFirstAncestor("Mobs") then
+					if anim.aipriority and (self.Figure:FindFirstAncestor("Mobs") or self.Figure ~= player.Character) then
 						self.animTable[name].anims[idx].anim.Priority = anim.aipriority
 					end
 					self.animTable[name].anims[idx].anim:AdjustWeight(anim.weight)
@@ -197,31 +199,40 @@ local Animate = PseudoInstance:Register("Animate",{
 			globalAnimation:Destroy()
 		end;
 		setupAnimations = function(self)
-			for name, fileList in pairs(self.animNames) do
-				if type(fileList) ~= "function" then
-					self:createAnimationSet(name, fileList)
+			local animNames do
+				if self.Humanoid:GetAttribute("HumanoidType") then
+					animNames = self.animNamesSpecial[self.Humanoid:GetAttribute("HumanoidType")]
+				else
+					animNames = self.animNames
+
 				end
-			end	
+				for name, fileList in (animNames) do
+					if type(fileList) ~= "function" then
+						self:createAnimationSet(name, fileList)
+					end
+				end	
+			end
+
 		end;
 		stopAllAnimations = function(self)
 			local oldAnim = self.CurrentAnim
-		
-		
+
+
 			self.CurrentAnim = ""
 			self.currentAnimInstance = nil
 			self.Janitor:Remove("KeyframeHandler")
-		
+
 			if self.currentAnimTrack then
 				self:EndCurrentAnimTrack()
 			end
-			
+
 			return oldAnim
 		end;
 		stopToolAnimations = function(self)
 			local oldAnim = self.toolAnim
-		
+
 			self.Janitor:Remove("KeyframeHandlerTool")
-		
+
 			self.toolAnim = ""
 			self.toolAnimInstance = nil
 			self.Janitor:Remove('toolAnim')
@@ -231,21 +242,21 @@ local Animate = PseudoInstance:Register("Animate",{
 			return oldAnim
 		end;	
 		playAnimation = function(self, animName, transitionTime, humanoid) 
-		--		print(animName .. " " .. idx .. " [" .. origRoll .. "]")
+			--		print(animName .. " " .. idx .. " [" .. origRoll .. "]")
 			if game.CollectionService:HasTag(self.Humanoid,"Unconscious") then 
 				return
 			end
 			local anim = self:rollAnimation(animName)
-		
+
 			-- switch animation		
 			if anim ~= self.currentAnimInstance then
-				
+
 				if self.currentAnimTrack then
 					self.currentAnimTrack:Stop(transitionTime)
 					self.Janitor:Remove("KeyframeHandler")
 				end
-		
-			
+
+
 				-- load it to the humanoid; get AnimationTrack
 				self.currentAnimTrack = anim
 				-- play the animation
@@ -255,56 +266,56 @@ local Animate = PseudoInstance:Register("Animate",{
 				self.CurrentAnimSpeed = 1.0
 
 				-- set up keyframe name triggers
-				
+
 				self.Janitor:Add(self.currentAnimTrack.KeyframeReached:Connect(function(frameName)
 					if frameName == "End" then
-				
+
 						local repeatAnim = self.CurrentAnim
 						-- return to idle if finishing an emote
-						
+
 						local animSpeed = self.CurrentAnimSpeed
 						self:playAnimation(repeatAnim, 0.0, self.Humanoid)
 						self.CurrentAnimSpeed  = animSpeed
 					end
 				end),"Disconnect","KeyframeHandler")
-				
+
 			end
 		end;
-	playToolAnimation = function(self, animName, transitionTime, humanoid, priority)	 
-	--		print(animName .. " * " .. idx .. " [" .. origRoll .. "]")
-		local anim = self:rollAnimation(animName)
-	
-		if self.toolAnimInstance ~= anim then
-				
-			if self.toolAnimTrack then
-				self.toolAnimTrack:Stop()
-				self.Janitor:Remove("KeyframeHandlerTool")
-				transitionTime = 0
-			end
-						
-			-- load it to the humanoid; get AnimationTrack
-			self.toolAnimTrack = anim
-			-- play the animation
-			self.toolAnimTrack:Play(transitionTime)
-			self.toolAnim = animName
-			self.toolAnimInstance = anim
-			self.Janitor:Add(self.toolAnimTrack.KeyframeReached:Connect(function(frameName)
-				if frameName == "End" then
-					self:playToolAnimation(animName, 0.0, self.Humanoid)
+		playToolAnimation = function(self, animName, transitionTime, humanoid, priority)	 
+			--		print(animName .. " * " .. idx .. " [" .. origRoll .. "]")
+			local anim = self:rollAnimation(animName)
+
+			if self.toolAnimInstance ~= anim then
+
+				if self.toolAnimTrack then
+					self.toolAnimTrack:Stop()
+					self.Janitor:Remove("KeyframeHandlerTool")
+					transitionTime = 0
 				end
-			end),"Disconnect","KeyframeHandlerTool")
+
+				-- load it to the humanoid; get AnimationTrack
+				self.toolAnimTrack = anim
+				-- play the animation
+				self.toolAnimTrack:Play(transitionTime)
+				self.toolAnim = animName
+				self.toolAnimInstance = anim
+				self.Janitor:Add(self.toolAnimTrack.KeyframeReached:Connect(function(frameName)
+					if frameName == "End" then
+						self:playToolAnimation(animName, 0.0, self.Humanoid)
+					end
+				end),"Disconnect","KeyframeHandlerTool")
+			end
+		end;
+		StopAnims = function(self)
+			self:stopAllAnimations()
+			self:stopToolAnimations()
+		end;
+		Destroy = function(self)
+			self.Janitor:Cleanup()
 		end
-	end;
-	StopAnims = function(self)
-				self:stopAllAnimations()
-				self:stopToolAnimations()
-	end;
-	Destroy = function(self)
-		self.Janitor:Cleanup()
-	end
-		
+
 	};
-	
+
 	Init = function(self,Figure)
 		self:superinit()
 		self.Figure = Figure;
@@ -345,10 +356,10 @@ local Animate = PseudoInstance:Register("Animate",{
 			end
 			self.ragdoll = true
 		end))
-	
+
 		if self.Humanoid:GetStateEnabled(Enum.HumanoidStateType.Jumping) then
 			self.Janitor:Add(self.Humanoid.Jumping:Connect(function()
-			
+
 				self:playAnimation("jump", 0.1, self.Humanoid)
 				self.JumpAnimTime = self.JumpAnimDuration
 			end),"Disconnect")
@@ -368,8 +379,8 @@ local Animate = PseudoInstance:Register("Animate",{
 			end),"Disconnect")
 		end	
 		self.Janitor:Add(self.Figure.ChildAdded:Connect(function(c)
-			
-			
+
+
 			local tool = self:getTool()
 			if tool and tool:FindFirstChild("HoldPart") then
 				self:animateTool()		
@@ -383,7 +394,7 @@ local Animate = PseudoInstance:Register("Animate",{
 		self.CurrentAnimSpeed = 1.0;	
 	end;
 })
-	
+
 return function(Character)
 	return PseudoInstance.new("Animate",Character or script.Parent)
 end

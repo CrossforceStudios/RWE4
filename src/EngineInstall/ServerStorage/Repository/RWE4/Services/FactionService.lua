@@ -356,6 +356,7 @@ function FactionService:IsCompatibleTeam(team1,team2)
 	return CollectionService:HasTag(team2,CollectionService:GetTags(team1)[1])
 end
 function FactionService:IsEnemy(plr,human)
+	if human:GetAttribute("HumanoidType") then return true end
 	local p2 = game.Players:GetPlayerFromCharacter(human.Parent)
 	if (not p2) then
 		if human.Parent:FindFirstChild("BOT") then

@@ -13,12 +13,23 @@ local CS = require(PlayerScripts:FindFirstChild("ClientSettings"))
 
 -- R6_animNames
 local R6_animNames = CS.AnimIds
+local R6_animNames_Hum = CS.HumanoidAnimIds
 
 
 
 -- Functions
 local function GetAnimation(self, Name)
 	return self[Name]
+end
+
+local HumanoidType = "None";
+
+local function GetAnimationSpecial(self, Name)
+	return self[HumanoidType][Name]
+end
+
+local function SetHumanoidType(self, Type)
+	HumanoidType = Type;
 end
 
 local function ConfigureAnimation(self, Name, AnimationNumber, NewId)
@@ -32,9 +43,14 @@ R6_animNames.GetAnimation        = GetAnimation
 R6_animNames.ConfigureAnimation  = ConfigureAnimation 
 
 
+R6_animNames_Hum.GetAnimation = GetAnimationSpecial
+R6_animNames_Hum.SetHumanoidType = SetHumanoidType
+R6_animNames_Hum.ConfigureAnimation  = ConfigureAnimation 
+
+
 -- dances
 
 -- emoteNames
 return {
-	animNames = {R6 = R6_animNames}; 
+	animNames = {R6 = R6_animNames; R6_Special = R6_animNames_Hum; }; 
 }

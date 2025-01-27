@@ -4,6 +4,7 @@ local CF = {
 };
 local RAD = math.rad
 return {
+	-- Replace the run and walk anims with your own.
     AnimIds = {
 		idle = 	{	
 			{ id = "rbxassetid://180435571", weight = 9, priority = Enum.AnimationPriority.Core; },
@@ -30,6 +31,51 @@ return {
 			{ id = "rbxassetid://182393478", weight = 10, priority = Enum.AnimationPriority.Idle; } 
 		},
 	};
+	-- Replace the run, climb, idle and walk anims with your own.
+	HumanoidAnimIds = {
+		Zombie = {
+			idle = 	{	
+				{ id = "rbxassetid://104211669242100", weight = 10, priority = Enum.AnimationPriority.Core; },
+			},
+			walk = 	{ 	
+				{ id = "rbxassetid://73132666350881", weight = 10, priority = Enum.AnimationPriority.Core; } 
+
+			}, 
+			run = 	{ 
+				{ id = "rbxassetid://18862738744", weight = 10, priority = Enum.AnimationPriority.Core; } 
+			},
+
+			jump = 	{
+				{ id = "rbxassetid://94392460546583", weight = 10, priority = Enum.AnimationPriority.Core; } 
+			}, 
+			fall = 	{
+				{ id = "rbxassetid://94718030947140", weight = 10, priority = Enum.AnimationPriority.Core; } 
+			}, 
+			sit = 	{
+				{ id = "rbxassetid://178130996", weight = 10, priority = Enum.AnimationPriority.Core; } 
+			},	
+			toolnone = {
+				{ id = "rbxassetid://182393478", weight = 10, priority = Enum.AnimationPriority.Idle; } 
+			},
+			climb = {
+				{ id = "rbxassetid://101128262619969", weight = 10, priority = Enum.AnimationPriority.Core; }
+			}
+		}
+		
+	};
+	defaultAnimCF = function(animTab,dt)
+		local aC0, aC1 = animTab.CF.RAW() * animTab.CF.ANG(animTab.AnimRot.X * animTab.stanceSway,animTab.AnimRot.Y * animTab.stanceSway,animTab.AnimRot.Z * animTab.stanceSway) * animTab.CF.RAW(animTab.AnimPos.X * animTab.stanceSway,animTab.COS(animTab.CameraAng.Y) * animTab.AnimPos.Y * animTab.stanceSway,animTab.SIN(animTab.CameraAng.Y) * animTab.AnimPos.Z * animTab.stanceSway), animTab.CF.ANG(-animTab.CameraAng.Y * animTab.crawlAlpha / 90, 0, 0) * animTab.CF.RAW(0,-1,0);
+		if (animTab.currentState == "Running" or animTab.currentState == "Walking") and not animTab.Aimed then
+			local wsp = animTab.walkSpeedSpring.p
+			aC0 = aC0 * animTab.gunbob(animTab.walkAnimName ,.25 *  wsp/animTab.bWS,.5 * wsp/animTab.bWS,dt)
+		elseif not animTab.Aimed and (not animTab.isPlayingAnim()) then
+			local idleAng2 = animTab.idleAng + animTab.RAD(105 * dt) * animTab.stanceSway							
+			aC0 = aC0 * animTab.Lerps.CFrame(animTab.CF.RAW(),animTab.gunbobIdle(idleAng2,dt),0.15)
+
+			animTab.setIdleAng(idleAng2)	
+		end
+		return aC0, aC1
+	end;
 	Events = {
 		"MapReady";
 	};

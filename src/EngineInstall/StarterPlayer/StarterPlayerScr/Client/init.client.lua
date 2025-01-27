@@ -601,6 +601,14 @@ do
 					Resources:AddComponent(name, component)
 					return Resources:GetComponent(name)
 				end,
+				RenderEngine = RenderEngine;
+				Janitor = Janitor;
+				CharacterParts = CharacterParts;
+				Player = player;
+				getAlpha = getAlpha;
+				Tween = Tween;
+				Angle = AUtils;
+				RayUtils = RayUtils;
 			}, Components)
 		end
 	end
