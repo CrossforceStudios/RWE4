@@ -5,5 +5,9 @@ return {
     DayNightCycle = true;
     -- Sync lighting to the settings for everyone
     LightingSync = false;
+    -- Ragdolls for everyone
+    RagdollOnDeath = true;
+    -- Use of round-based maps (server feature)
+    Maps = false;
 
 }

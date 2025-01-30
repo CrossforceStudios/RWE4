@@ -15,6 +15,10 @@ local createViewModel = Resources:LoadLibrary("createViewModel")
 local FactionService = Resources:LoadLibrary("FactionService")
 local PhotoSiris = Resources:LoadLibrary("PhotoSiris")
 local FastDelay = Resources:LoadLibrary("FastDelay")
+local Ragdoll = Resources:LoadLibrary("Ragdoll")
+local fastSpawn = Resources:LoadLibrary("FastSpawn")
+local Janitor = Resources:LoadLibrary("Janitor")
+local PseudoInstance = Resources:LoadLibrary("PseudoInstance")
 
 -- Event System
 local ServerSettings = require(script.Parent.ServerSettings)
@@ -30,6 +34,8 @@ local armC0 = {
 local Grips = {};
 local gunIgnores = {};
 local animWelds = {};
+local ragdolls = {};
+local jans = {};
 ------
 
 for _, pair in ServerSettings.CollisionPairs do
@@ -59,6 +65,8 @@ function runInit(plr: Player)
 	plr.CharacterAdded:Connect(function(c)
 		local head = c:WaitForChild("Head",200)
 		local torso  = c:WaitForChild("Torso",200)
+		jans[plr] = Janitor.new()
+
 		local ViewM do
 			local RArm = c:FindFirstChild("Right Arm")
 			local LArm = c:FindFirstChild("Left Arm")
@@ -79,6 +87,62 @@ function runInit(plr: Player)
 				RemoteService.send("Client",plr,"SetGripsClient",gripTab)
 			end)
 		end
+
+		c:WaitForChild("Humanoid", 200)
+		ragdolls[plr] = PseudoInstance.new("Ragdoll",c)
+		fastSpawn(function() ragdolls[plr]:Setup() end)
+		jans[plr]:Add(c.Humanoid.Died:Connect(function()
+			c:SetAttribute("FaceState","Dead")
+			for i, grip in pairs(Grips[plr]) do
+				if grip then
+					grip:Destroy()
+				end
+			end
+			--healthAgents[plr] = nil;
+			Grips[plr] = {
+				Left = nil;
+				Right = nil;
+			};
+			RemoteService.send("Client",plr,"SetCar",nil,nil)
+			fastSpawn(function()
+				--[[XPMs[plr]:Collect()
+				XPMs[plr]:CalculateHealth()
+				pcall(function()
+					XPMs[plr]:Distribute(function()
+
+					end)
+				end)]]--
+				if Resources:FindGlobalFeature("RagdollOnDeath") then
+					ragdolls[plr]:Ragdoll()
+				end
+			end)
+			--[[fastSpawn(function()
+				RemoteService.fetch("Client",plr,"DisplayFeats",notifList[plr])
+				notifList[plr].achievement = nil;
+				notifList[plr].level = nil;
+				notifList[plr].unlock = nil;
+				RemoteService.send("Client",plr,"ResetToMenu")
+
+			end)
+			]]--
+
+			fastSpawn(function()
+				FastWait(3)
+
+				RemoteService.bounceOthers("Client",plr,"FadeCharacter",c,3)
+				FastWait(3)
+			end)
+			jans[plr]:Cleanup()
+			jans[plr]:Destroy()
+			jans[plr] = nil
+			--[[if script:GetAttribute("GameMode"):find("Tutorial") then
+				FastDelay(3, function()
+					FastWait(6)
+					deployPlayer(plr)		
+				end)
+			end]]--
+		end),"Disconnect")
+
 	end)
 	task.delay(10, function()
 		if true then
@@ -129,6 +193,24 @@ RemoteService.listen("Server","Send","SetAJointC1",function(player,Joint,JC1)
 			end
 		end
 	end)
+end)
+-----
+RemoteService.listen("Server","Send","ResetViewModel",function(player,Vars)
+	if Vars.gunIgnore then
+		Vars.gunIgnore:Destroy()
+		gunIgnores[player] = nil;
+		animWelds[player.Name] = nil;
+	end
+	if Vars.Shoulders then
+		if Vars.LArm and Vars.RArm then
+			if Vars.Shoulders.Right and Vars.Shoulders.Left then
+				Vars.Shoulders.Right.Part1 = Vars.RArm
+				Vars.Shoulders.Left.Part1 = Vars.LArm
+				Vars.RArm.Transparency = 0
+				Vars.LArm.Transparency = 0
+			end
+		end
+	end
 end)
 -----
 Players.PlayerAdded:Connect(function(plr)

@@ -72,7 +72,7 @@ local Spring = Resources:LoadLibrary("Spring")
 local Tween = Resources:LoadLibrary("Tween")
 local AndList = Resources:LoadLibrary("AndList")
 local FastWait = Resources:LoadLibrary("FastWait")
-
+local isIgnored = Resources:LoadLibrary("isIgnored")
 -- Shortcuts
 local VEC2 = Vector2.new
 local V3 = Vector3.new
@@ -319,6 +319,86 @@ RemoteService.listen("Client","Send","SetGripsClient",function(grips)
 	ViewModel.Grips.Right = grips[1]
 	ViewModel.Grips.Left = grips[2]
 end)
+local changePlayerTrans = Resources:LoadLibrary("changePlayerTrans")({
+	modifiers = {
+		regular = function(P, Trans, IgnoreL)
+			local PD = P:GetDescendants()
+			local pl = {}
+			for i, v in ipairs(PD) do
+				if v:IsA("BasePart") then
+					if ((not v.Name:find("Glove")) and (not v:FindFirstChild("ArmPart")) and (not game.CollectionService:HasTag(v,"FArm")))  or v.Name == "Torso" then
+
+						if (not  ((v:IsDescendantOf(CurrentItem.Value) and (not v.Parent.Name:find("_Holster"))) or isIgnored(v, IgnoreL)))  then
+							table.insert(pl,v)
+						elseif not CurrentItem.Value  then
+							table.insert(pl,v)		
+						end
+					end
+				end
+			end
+			for i, v in ipairs(pl) do
+				local ig = false
+				if v:IsA("BasePart") and v.Name ~= "LimbCollider" then
+					task.spawn(function()
+						v[Humanoid.SeatPart ~= nil and "Transparency" or "LocalTransparencyModifier"] = Trans
+						v.CastShadow = false
+					end)
+				end
+			end
+		end;
+		spectate = function(P, Trans)
+			local PD = P:GetDescendants()
+			local pl = {}
+			for i, v in ipairs(PD) do
+				if v:IsA("BasePart") then
+					if ((not v.Name:find("Glove")) and (not v:FindFirstChild("ArmPart")) and (not game.CollectionService:HasTag(v,"FArm")))  or v.Name == "Torso" then
+
+						if (not  ((v:IsDescendantOf(CurrentItem.Value) and (not v.Parent.Name:find("_Holster")))))  then
+							table.insert(pl,v)
+						elseif not CurrentItem.Value  then
+							table.insert(pl,v)		
+						end
+					end
+				end
+			end
+			for i, v in ipairs(pl) do
+				local ig = false
+				if v:IsA("BasePart") and v.Name ~= "LimbCollider" then
+					task.spawn(function()
+						v[Humanoid.SeatPart ~= nil and "Transparency" or "LocalTransparencyModifier"] = Trans
+						v.CastShadow = false
+
+					end)
+				end
+			end
+		end;
+		partlist  = function(LS, Trans, IgnoreL)
+			local PD = LS
+			if PD then
+				for i, v in ipairs(PD) do
+					if not v.Parent then continue end
+					if v.Parent:FindFirstChild("HoldPart") or isIgnored(v, IgnoreL) then
+						table.remove(PD,i)
+					end
+				end
+				for i, v in ipairs(PD) do
+					local ig = false
+					if v:IsA("BasePart") and v.Name ~= "LimbCollider" and v.Parent then
+						if IgnoreL then
+							ig = isIgnored(v, IgnoreL)
+						end
+						if not ig and not v.Parent:FindFirstChild("HoldPart") then
+							task.spawn(function()
+								v[Humanoid.SeatPart ~= nil and "Transparency" or "LocalTransparencyModifier"] = Trans
+								v.CastShadow = false
+							end)
+						end
+					end
+				end
+			end
+		end; 
+	}
+})
 do 
 	function getAlphaName(alpha)
 		local compName ="";
@@ -431,6 +511,17 @@ player.CharacterAdded:Connect(function(ch)
     startRenders()
 	table.insert(Connections,Humanoid.StateChanged:Connect(function(old,new)
 		InputComp.CharacterController.State = (new)
+	end))
+	table.insert(Connections, Humanoid.Died:Connect(function()
+		RemoteService.send("Server","ResetViewModel",{
+			gunIgnore = ViewModel.gunIgnore;
+			Shoulders = CharacterJoints.Shoulders;
+			LArm = CharacterParts.LArm;
+			RArm = CharacterParts.RArm;
+			LWeld = ViewModel.LWeld;
+			RWeld = ViewModel.RWeld;
+			Grips = ViewModel.Grips;
+		})
 	end))
 	InputComp.CharacterController:Enable(true)
 end)
@@ -608,7 +699,11 @@ do
 				getAlpha = getAlpha;
 				Tween = Tween;
 				Angle = AUtils;
+				RemoteService = RemoteService;
+				PlayerScripts = script.Parent;
+				RunService = RunService;
 				RayUtils = RayUtils;
+				changePlayerTrans = changePlayerTrans;
 			}, Components)
 		end
 	end
