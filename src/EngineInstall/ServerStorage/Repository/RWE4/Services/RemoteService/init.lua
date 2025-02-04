@@ -2,6 +2,7 @@ local Resources = require(game.ReplicatedStorage.Resources)
 local TextService = game:GetService("TextService")
 local RunService = game:GetService("RunService")
 local Janitor = Resources:LoadLibrary("Janitor")
+local RF = require(script.RemoteFunction)
 local TICK = tick
 if not _G.RJanitor then
 	_G.RJanitor = Janitor.new()
@@ -12,6 +13,7 @@ end
 local network = {
 	Send = Resources:GetRemoteEvent("Send");
 	Fetch =  Resources:GetRemoteFunction("Fetch");
+	CFetch =  RF.new("CFetch");
 	Bounce =  Resources:GetRemoteEvent("Bounce");
 	BounceU =  Resources:GetUnreliableRemoteEvent("Bounce");
 	Listeners = Resources:GetRemoteFunction("GetListeners");
@@ -217,7 +219,7 @@ network.startClient = function()
 			end
 		end
 	end),"Disconnect","ClientSend")
-	network.Fetch.OnClientInvoke = function(...)
+	network.CFetch.Event = function(...)
 		local args = {...}
 		if args then
 			if network.RemoteListeners["Fetch"]["Client"][args[1]] then
@@ -228,6 +230,7 @@ network.startClient = function()
 			end
 		end
 	end
+	
 	_G.RJanitor:Add(network.Bounce.OnClientEvent:Connect(function(...)
 		local args = {...}
 		if args then
@@ -339,7 +342,7 @@ network.fetch = function(modelType,...)
 		local args = {...}
 		local player = args[1]
 		table.remove(args,1)
-		local success, data = pcall(function() return {network.Fetch:InvokeClient(player,unpack(args))} end)
+		local success, data = pcall(function() return {network.CFetch:Fire(player,unpack(args))} end)
 		if success then
 			return unpack(data)
 		else
@@ -454,7 +457,7 @@ network.bounceOthersTeamU = function(modelType,player,team,...)
 		end
 	end
 end
-network.filter = function(player,msgType,msg,lang,tfc)
+network.filter = function(player,msgType,msg)
 	if msg ~= "" then
 		if msgType == "Broadcast" then
 			-- Filter the incoming message and send the filtered message
@@ -463,13 +466,7 @@ network.filter = function(player,msgType,msg,lang,tfc)
 			filteredText = getFilteredMessage(messageObject)
 			return filteredText
 		elseif msgType == "Private" then
-			
-		elseif msgType == "BroadcastTranslate" then
-			-- Filter the incoming message and send the filtered message
-			local messageObject = getTextObject(msg, player.UserId)
-			local filteredText = ""
-			filteredText = getFilteredMessageTranslated(messageObject, player.UserId, lang, tfc)
-			return filteredText
+
 		end
 	end
 end

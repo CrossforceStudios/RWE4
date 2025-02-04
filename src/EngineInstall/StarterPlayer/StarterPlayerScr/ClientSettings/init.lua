@@ -3,7 +3,7 @@ local CF = {
 	ANG = CFrame.Angles;
 };
 local RAD = math.rad
-return {
+local ClientSettings = {
 	-- Replace the run and walk anims with your own.
     AnimIds = {
 		idle = 	{	
@@ -63,6 +63,7 @@ return {
 		}
 		
 	};
+	-- default cframe animation used when weapons aren't equipped.
 	defaultAnimCF = function(animTab,dt)
 		local aC0, aC1 = animTab.CF.RAW() * animTab.CF.ANG(animTab.AnimRot.X * animTab.stanceSway,animTab.AnimRot.Y * animTab.stanceSway,animTab.AnimRot.Z * animTab.stanceSway) * animTab.CF.RAW(animTab.AnimPos.X * animTab.stanceSway,animTab.COS(animTab.CameraAng.Y) * animTab.AnimPos.Y * animTab.stanceSway,animTab.SIN(animTab.CameraAng.Y) * animTab.AnimPos.Z * animTab.stanceSway), animTab.CF.ANG(-animTab.CameraAng.Y * animTab.crawlAlpha / 90, 0, 0) * animTab.CF.RAW(0,-1,0);
 		if (animTab.currentState == "Running" or animTab.currentState == "Walking") and not animTab.Aimed then
@@ -75,6 +76,14 @@ return {
 			animTab.setIdleAng(idleAng2)	
 		end
 		return aC0, aC1
+	end;
+	-- this animation plays when nothing is happening.
+	IdleAnimation = function(a, dt)
+		return CFrame.new(
+			math.sin(a / 2) / 35,
+			math.sin(a * 5 / 4) / 35,
+			math.sin(a * 3 / 4) / 35
+		)
 	end;
 	Events = {
 		"MapReady";
@@ -267,3 +276,6 @@ return {
 		[Enum.PlayerActions.CharacterJump] = {Enum.KeyCode.Space;Enum.KeyCode.ButtonA};
 	};	
 }
+
+ClientSettings.AnimAPI = require(script.AnimAPI)
+return ClientSettings

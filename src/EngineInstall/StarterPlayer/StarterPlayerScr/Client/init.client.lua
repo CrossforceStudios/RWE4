@@ -2,6 +2,8 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local Resources = require(ReplicatedStorage:WaitForChild("Resources",10))
 local Players = game:GetService("Players")
+local UIS = game:GetService("UserInputService")
+---
 local player = Players.LocalPlayer
 local Components = Resources:GetLocalTable("Components")
 Resources:AddComponent("Tweener", Resources:LoadLibrary("TweenHandler")())
@@ -56,6 +58,7 @@ local CharacterJoints = {
 
 _G.CharacterStance = {};
 local CharState = {};
+local CurrentItem = {};
 -- Necessary Modules
 local Enumeration = Resources:LoadLibrary("Enumeration")
 local RemoteService = Resources:LoadLibrary("RemoteService")
@@ -120,16 +123,46 @@ do
 			end
 		end
 	end
+	local function gunBob(animName, a, r, dt)
+		if not CurrentItem.Animations then
+			return CF.RAW()
+		end
+		local anim = CurrentItem.Animations[animName]
+		if anim then
+			return anim(a, r, walkSpeedSpring.p, Humanoid.MoveDirection * CharacterParts.HRP.Velocity.Magnitude, pDist, dt)
+		end
+	end
+	local function gunBobIdle(a, dt)
+		return ClientSettings.IdleAnimation(a, dt)
+	end
+	local walkSpeedSpring = Spring.new(0.5,8,14)
 	local disabledStances = {};
 	local Stance = 0;
 	local stanceSway = 1	
 	local stanceTrans = false
+	local currentState = "Idling";
+	local lastPos = V3()
+	local pDist = 0
+	local idleAng = 0
+	local crawlAlpha = 0
+	local idleAlpha = 1
+	local walkAlpha = 0
+	local runAlpha = 0
+	local aimAlpha = 0
 	local leanAnim = {
 		Pos = Spring.new(0.8,16,0);
 		Rot = 0;
 		Change = false;
 		Factor  = ClientSettings.LeanAngle or RAD(15);
 	};
+	local Anim = {
+		Pos = V3();
+		Rot = Spring.new(1,4,V3());
+		Ang = 0;
+		Code = 0;
+	};
+	local lastPos = V3()
+	local MotionVector = VEC2(0,0)
 	CharState.getStanceIndex = function(self,stance)
 		return stances[stance]
 	end
@@ -170,22 +203,145 @@ do
 		stanceTrans = false
 	end;
 
+	function CharState:runAnimCF(dt)
+		local tween = Resources:GetComponent("Tweener")
+		local pos = UIS:GetMouseDelta()
+		if InputComp.Platform == "Console" then
+			pos = InputComp:GetCurrentGamepadState(Enum.KeyCode.Thumbstick2).Position
+			MotionVector = VEC2(pos.X * 18, pos.Y * 18)
+		elseif InputComp.Platform == "Keyboard" then
+			MotionVector = VEC2(math.clamp(pos.X, -18, 18),math.clamp(pos.Y, -18, 18))
+		end
+		
+		local animTab = {
+			CurrentItemValue = CurrentItem.Value;
+			CurrentItemS = CurrentItem.Settings;
+			Aimed = CurrentItem.Aimed;
+			gunRecoilSpring = _G.gunRecoilSpring;
+			CameraService = CameraService;
+			stanceSway = stanceSway;
+			Lerps = Lerps;
+			stanceTrans = stanceTrans;
+			CF = CF;
+			SIN = SIN;
+			COS = COS;
+			RAD = RAD;
+			aimAngle = 0;
+			gunbob = gunBob;
+			gunbobIdle = gunBobIdle;
+			Stance = Stance;
+			currentState = currentState;
+			bWS = bWS;
+			recoilAnim = recoilAnim;
+			walkSpeedSpring = walkSpeedSpring;
+			aimHeadOffset = aimHeadOffset;
+			AnimRot = Anim.Rot:Update(dt);
+			AnimPos = Anim.Pos;
+			camCF = camCF;
+			resetSway = function()
+				swaySpring.g = V3()
+			end,
+			swayCF = swaySpring;
+			initialStockType = CurrentItem.stockType;
+			isPlayingAnim = function()
+				return CurrentItem:IsPlayingAnim();
+			end,
+			crawlAlpha = crawlAlpha;
+			CameraAng = _G.CameraAng;
+			setCamCF = function(cCF)
+				camCF = cCF;
+			end,
+			setAnimPos = function(v3)
+				Anim.Pos = v3
+			end,
+			setAnimRot = function(v3)
+				Anim.Rot.g = v3
+			end,
+			humanRotation = function()
+				local pc = workspace.CurrentCamera.CFrame
+				if Humanoid.MoveDirection.X == 0 then
+					return 0
+				else
+					return 	pc.RightVector:Dot(Humanoid.MoveDirection)
+				end
+			end,
+			stockIndex = CurrentItem.stockIndex;
+			stockFoldIndex =  _G.stockFIndex or CurrentItem.stockIndex;
+			setIdleAng = function(val)
+				idleAng = val
+			end,
+			idleAng = idleAng;
+			walkAnimName = walkAnim;
+			humanDirection = Humanoid.MoveDirection;
+		};
+		animTab.aimAngle = 0 do
+			animTab.NVGOffset = NVGOffset
+			animTab.aimAngle = aimAngle
+			if CurrentItem.Value then
+				animTab.NVG = CurrentItem.Value:GetAttribute("NVGSight");
+			else
+				animTab.NVG = false
+			end
+		end
+		if CurrentItem.Value then
+			local basePos = WeaponUtils:GetBasePose(CurrentItem.Value)
+			if (not CurrentItem.Aimed) and (not colTweenDB) and (not Humanoid.Sit) and features("getFeature", "Collisions") then
+				colTweenDB = true
+				local res, hit, lerp = MH:GetCollisionData(player)
+				if res and hit.CanCollide and (not CurrentItem:IsPlayingAnim()) and (CharState.currentState:lower() ~= "running") and Humanoid.MoveDirection.Magnitude <= 0 then
+					local lcf = Lerps.CFrame(CurrentItem:getArmPos(basePos,"left"), CurrentItem:getArmPos("running","left"), lerp)
+					local rcf = Lerps.CFrame(CurrentItem:getArmPos(basePos,"right"), CurrentItem:getArmPos("running","right"), lerp)
+					local gcf = Lerps.CFrame(CurrentItem:getArmPos(basePos,"grip"), CurrentItem:getArmPos("running","grip"), lerp)
+					tween("Joint", ViewModel.LWeld, false, lcf, getAlpha("Sharp"), 0.1)
+					tween("Joint", ViewModel.RWeld, false, rcf, getAlpha("Sharp"), 0.1)
+					tween("Joint", ViewModel.Grips[ViewModel.Grips.Current], false, gcf, getAlpha("Sharp"), 0.1)
+					FastWait(0.1)
+				end
+				colTweenDB = false
+			end
+			if ViewModel.animWeld then
+				local args = {}
+				args[1] = dt
+				args[2] = "General"
+				if not Humanoid.Sit then
+					local animC0, animC1 = WeaponUtils:GetAnimCF(CurrentItem.Value, animTab, unpack(args))
+					ViewModel.animWeld.C0 = animC0
+					ViewModel.animWeld.C1 = animC1	
+				end
+			end
+		elseif ViewModel.animWeld then
+			local args = {}
+			args[1] = dt
+			args[2] = "General"
+			if not Humanoid.Sit then
+				local animC0, animC1 = ClientSettings.defaultAnimCF(animTab, unpack(args))
+				ViewModel.animWeld.C0 = animC0
+				ViewModel.animWeld.C1 = animC1	
+			end 
+		end
+	end;	
 
 	CharState = setmetatable(CharState, {
 		__index = function(self,k)
 			local key = k:lower()
 			if key == "stance" then
 				return Stance
-			--[[elseif key == "currentstate" then
-				return currentState]]--
+			elseif key == "currentstate" then
+				return currentState
 			elseif key == "stanceblacklist" then
 				return disabledStances
 			elseif key == "stancetrans" then
 				return stanceTrans
 			elseif key == "lean" then
 				return Lean
+			elseif key == "motionvector" then
+				return MotionVector
 			elseif key == "movedirection" then
 				return Humanoid.MoveDirection
+			elseif key == "lastpos" then
+				return lastPos
+			elseif key == "pdist" then
+				return pDist
 			else
 				return nil;
 			end
@@ -198,6 +354,8 @@ do
 				crawlCamRot = v
 			elseif key == "bws" then
 				bWS = v;
+			elseif key == "motionvector" then
+				MotionVector = v
 			elseif key == "stance" then
 				Stance = v 
 			elseif key == "grounded" then
@@ -207,6 +365,10 @@ do
 				if CurrentItem.Value then
 					CharState:chooseWalkAnim()
 				end]]--
+			elseif key == "lastpos" then
+				lastPos = v
+			elseif key == "pdist" then
+				pDist = v;
 			elseif key == "stancesway" then
 				stanceSway = v
 			elseif key == "stanceblacklist" then
@@ -221,7 +383,19 @@ do
 		end
 	})
 end
----------
+-----
+do
+	local item = nil;
+	local S = nil;
+	local newMag = false;
+	
+	CurrentItem = setmetatable({
+		IsPlayingAnim = function(self)
+			return false
+		end,
+	},{})
+end
+-----
 CameraService:startClient()
 local soundUpdate do
 	local SoundBox2 = PseudoInstance.new("SoundBox",script.Parent.Footsteps,script.Parent.DeathSounds,script.Parent.JumpSounds)
@@ -280,6 +454,11 @@ do
 
 end
 function startRenders()
+	RenderEngine:AddGeneralRender(function(dt)
+		CharState:runAnimCF(dt)
+		CharState.pDist = (CharacterParts.HRP and (CharState.pDist + (CharState.lastPos - CharacterParts.HRP.CFrame.p).magnitude) or 0)
+		CharState.lastPos = CharacterParts.HRP.CFrame.p
+	end)
 	fastSpawn(function()
 		while  Character.Parent do
 			local animWeld = ViewModel.animWeld
