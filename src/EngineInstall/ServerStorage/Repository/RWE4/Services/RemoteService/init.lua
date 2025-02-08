@@ -397,6 +397,34 @@ network.bounceTeamU = function(modelType,team,...)
 		end
 	end
 end
+network.bounceTeamFilter = function(modelType,team,filter,...)
+	if modelType == "Server" then
+		local args = {...}
+		network.Bounce:FireServer(unpack(args))
+	elseif modelType == "Client" then
+		do
+			local args = {...}
+			for _, p in ipairs(team:GetPlayers()) do
+				if not filter(p) then continue end 
+				network.Bounce:FireClient(p,unpack(args))
+			end	
+		end
+	end
+end
+network.bounceTeamFilterU = function(modelType,team,filter,...)
+	if modelType == "Server" then
+		local args = {...}
+		network.BounceU:FireServer(unpack(args))
+	elseif modelType == "Client" then
+		do
+			local args = {...}
+			for _, p in ipairs(team:GetPlayers()) do
+				if not filter(p) then continue end 
+				network.BounceU:FireClient(p,unpack(args))
+			end	
+		end
+	end
+end
 network.bounceOthers = function(modelType,player,...)
 	if modelType == "Server" then
 		local args = {...}

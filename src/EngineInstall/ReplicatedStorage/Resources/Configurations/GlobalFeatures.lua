@@ -9,5 +9,8 @@ return {
     RagdollOnDeath = true;
     -- Use of round-based maps (server feature)
     Maps = false;
-
+    -- Furnitures for everyone
+    Furnitures = false;
+    -- Footprints for everone
+    Footprints = true;
 }

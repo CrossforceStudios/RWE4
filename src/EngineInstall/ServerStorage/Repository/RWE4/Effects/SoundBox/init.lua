@@ -15,6 +15,8 @@ local fastSpawn = Resources:LoadLibrary("FastSpawn")
 local SeriesM = Resources:LoadLibrary("SeriesMath")
 local WaterS = Resources:LoadLibrary("Water")
 local StatusSounds = Resources:LoadConfiguration("StatusSounds")
+local lp = Players.LocalPlayer
+local footprintsFolder = lp.PlayerScripts:FindFirstChild("Footprints") 
 
 local SFX = {
 	Died = 0;
@@ -37,6 +39,11 @@ local LoopedSounds = {
 	Climbing = true,
 	FreeFalling = true,
 	Running = true,	
+}
+
+local decay = {
+	["Sand"] = 2,
+	["Snow"] = 5,
 }
 
 local WaterSound = {"rbxassetid://130778103",1.6,.4,true};
@@ -256,7 +263,8 @@ return PseudoInstance:Register("SoundBox",{
 				if sound.Playing then
 					sound.PlaybackSpeed = self.RunningSounds:FindFirstChild(FloorMaterial.Name).PlaybackSpeed  * (vel.Magnitude/18) 
 					sound.PlaybackSpeed = sound.PlaybackSpeed - ((sound.PlaybackSpeed*0.9)*stepDeltaSeconds)
-				end
+				end					
+				
 			end,
 		}
 	};
@@ -490,7 +498,6 @@ return PseudoInstance:Register("SoundBox",{
 			self.currentSpeed[mob] = 0;
 			self.Sounds[mob] = {}
 			local Figure = mob
-			print(Figure)
 			self.Head[mob] = Figure:WaitForChild("Head")
 			local head = self.Head[mob]
 			CreateNewSound("GettingUp", "rbxasset://sounds/action_get_up.mp3", false, 1, head)
@@ -526,6 +533,18 @@ return PseudoInstance:Register("SoundBox",{
 				self.Sounds[mob][SFX.Running].EmitterSize 	= self.RunningSounds:WaitForChild(mob.Human.FloorMaterial.Name).Volume * (vel/14) * 50
 				vel = a
 			end),"Disconnect",mi.."Running")
+			self.Janitor:Add(self.Sounds[mob][SFX.Running].DidLoop:Connect(function()
+				local FloorMaterial = mob.Human.FloorMaterial
+				if FloorMaterial and footprintsFolder then
+					local footprint = footprintsFolder:FindFirstChild(FloorMaterial.Name)
+					if footprint then
+						footprint = footprint:Clone()
+						footprint:PivotTo(mob.PrimaryPart.CFrame * CFrame.new(0, -(mob.PrimaryPart.Size.Y * 1.5), 0) * CFrame.new(0, -footprint.PrimaryPart.Size.Y, 0))
+						footprint.Parent = workspace.HoleStorage
+						game.Debris:AddItem(footprint, decay[FloorMaterial.Name] or 3)
+					end
+				end
+			end),"Disconnect")
 			self.Janitor:Add(mob.Human.StateChanged:connect(function(old, new)
 				local speed
 				if new == Enum.HumanoidStateType.Swimming then
@@ -632,6 +651,20 @@ return PseudoInstance:Register("SoundBox",{
 					end
 					self.StateUpdated:Fire(new,plr,speed)
 				end),"Disconnect",plr.Name .. "StateChanged")
+				if Resources:FindGlobalFeature("Footprints") then
+					self.Janitor:Add(self.Sounds[plr][SFX.Running].DidLoop:Connect(function()
+						local FloorMaterial = c.Humanoid.FloorMaterial
+						if FloorMaterial and footprintsFolder then
+							local footprint = footprintsFolder:FindFirstChild(FloorMaterial.Name)
+							if footprint then
+								footprint = footprint:Clone()
+								footprint:PivotTo(c.PrimaryPart.CFrame * CFrame.new(0, -(c.PrimaryPart.Size.Y * 1.5), 0) * CFrame.new(0, -footprint.PrimaryPart.Size.Y, 0))
+								footprint.Parent = workspace.HoleStorage
+								game.Debris:AddItem(footprint, decay[FloorMaterial.Name] or 3)
+							end
+						end
+					end),"Disconnect")
+				end
 				for _, v in pairs(self.Sounds[plr]) do
 					self.Janitor:Add(v,"Destroy",plr.Name.."Sound"..v.Name)
 				end
