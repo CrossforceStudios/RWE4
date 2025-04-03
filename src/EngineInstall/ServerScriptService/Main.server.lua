@@ -20,10 +20,25 @@ local fastSpawn = Resources:LoadLibrary("FastSpawn")
 local Janitor = Resources:LoadLibrary("Janitor")
 local PseudoInstance = Resources:LoadLibrary("PseudoInstance")
 
--- Event System
+-- Event System + Server Plugins 
 local ServerSettings = require(script.Parent.ServerSettings)
 for _, event in ServerSettings.Events do
     EventSystem:AddEvent(event)
+end
+local ServerPlugins = {} do
+	for i, pl: ModuleScript in script.Plugins:GetDescendants() do
+		if pl:IsA("ModuleScript") then
+			print("Loading Server Plugin", pl.Name, "...")
+			ServerPlugins[i] = require(pl)
+		end
+	end
+	local count = #ServerPlugins
+	for i, pl: ModuleScript in script.Parent.Plugins:GetDescendants() do
+		if pl:IsA("ModuleScript") then
+			print("Loading Server Plugin", pl.Name, "...")
+			ServerPlugins[count + i] = require(pl)
+		end
+	end
 end
 -- Arm C0 Values
 local armC0 = {
@@ -37,30 +52,6 @@ local animWelds = {};
 local ragdolls = {};
 local jans = {};
 ------
-
-for _, pair in ServerSettings.CollisionPairs do
-	if pair[1] == "Default" or pair[2] == "Default" then
-		if PhysicsService:IsCollisionGroupRegistered(pair[1]) and PhysicsService:IsCollisionGroupRegistered(pair[2]) then
-			PhysicsService:CollisionGroupSetCollidable(pair[1], pair[2], pair[3])
-		else
-			if pair[1] == "Default" then
-				PhysicsService:RegisterCollisionGroup(pair[2])
-			else
-				PhysicsService:RegisterCollisionGroup(pair[1])
-			end
-			PhysicsService:CollisionGroupSetCollidable(pair[1], pair[2], pair[3])
-		end
-	else
-		if PhysicsService:IsCollisionGroupRegistered(pair[1]) and PhysicsService:IsCollisionGroupRegistered(pair[2]) then
-			PhysicsService:CollisionGroupSetCollidable(pair[1], pair[2], pair[3])
-		else
-			PhysicsService:RegisterCollisionGroup(pair[1])
-			PhysicsService:RegisterCollisionGroup(pair[2])
-			PhysicsService:CollisionGroupSetCollidable(pair[1], pair[2], pair[3])
-		end
-	end
-end
------
 function runInit(plr: Player)
 	plr.CharacterAdded:Connect(function(c)
 		local head = c:WaitForChild("Head",200)
@@ -144,6 +135,15 @@ function runInit(plr: Player)
 		end),"Disconnect")
 
 	end)
+	for _, pl in ServerPlugins do
+		if pl.PlayerAdded then
+			pl.PlayerAdded({
+				RemoteService = RemoteService;
+				Player = plr;
+				
+			})
+		end
+	end
 	task.delay(10, function()
 		if true then
 			plr:LoadCharacter()
@@ -216,7 +216,39 @@ end)
 Players.PlayerAdded:Connect(function(plr)
 	EventSystem:FireEvent("PlayerAdded", plr)
 end)
+
 FactionService:startServer()
+for _, pair in ServerSettings.CollisionPairs do
+	if pair[1] == "Default" or pair[2] == "Default" then
+		if PhysicsService:IsCollisionGroupRegistered(pair[1]) and PhysicsService:IsCollisionGroupRegistered(pair[2]) then
+			PhysicsService:CollisionGroupSetCollidable(pair[1], pair[2], pair[3])
+		else
+			if pair[1] == "Default" then
+				PhysicsService:RegisterCollisionGroup(pair[2])
+			else
+				PhysicsService:RegisterCollisionGroup(pair[1])
+			end
+			PhysicsService:CollisionGroupSetCollidable(pair[1], pair[2], pair[3])
+		end
+	else
+		if PhysicsService:IsCollisionGroupRegistered(pair[1]) and PhysicsService:IsCollisionGroupRegistered(pair[2]) then
+			PhysicsService:CollisionGroupSetCollidable(pair[1], pair[2], pair[3])
+		else
+			PhysicsService:RegisterCollisionGroup(pair[1])
+			PhysicsService:RegisterCollisionGroup(pair[2])
+			PhysicsService:CollisionGroupSetCollidable(pair[1], pair[2], pair[3])
+		end
+	end
+end
+task.spawn(function()
+	for _, pl in ServerPlugins do
+		if pl.Init then
+			pl.Init({
+				RemoteService = RemoteService;
+			}, Resources:GetLocalTable("Components"))
+		end
+	end
+end)
 -----
 print(Resources:FindGlobalFeature("DayNightCycle"))
 if Resources:FindGlobalFeature("DayNightCycle") then
