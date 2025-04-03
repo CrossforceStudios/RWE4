@@ -19,6 +19,8 @@ local Ragdoll = Resources:LoadLibrary("Ragdoll")
 local fastSpawn = Resources:LoadLibrary("FastSpawn")
 local Janitor = Resources:LoadLibrary("Janitor")
 local PseudoInstance = Resources:LoadLibrary("PseudoInstance")
+local Lerps = Resources:LoadLibrary("Lerps")
+local Tween = Resources:LoadLibrary("Tween")
 
 -- Event System + Server Plugins 
 local ServerSettings = require(script.Parent.ServerSettings)
@@ -245,6 +247,13 @@ task.spawn(function()
 		if pl.Init then
 			pl.Init({
 				RemoteService = RemoteService;
+				Lerps = Lerps;
+				Tween = Tween;
+				FactionService = FactionService;
+				Events = EventSystem;
+				fastSpawn = fastSpawn;
+				FastDelay = FastDelay;
+				Janitor = Janitor;
 			}, Resources:GetLocalTable("Components"))
 		end
 	end
