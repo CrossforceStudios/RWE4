@@ -5,6 +5,14 @@ local CartridgeList = Resources:LoadConfiguration("Cartridge")
 local ch = require(script.CommonHooks)
 local SMOKE_NADE_COLOR_NAMES = {"Bright red";BrickColor.White().Name;"Bright orange";"Bright yellow";"Bright green";"Bright blue";"Dark indigo";"Bright violet";}
 local LERP_IDLE_THRESH = 0.15
+local PRE_ASSEMBLE_SLOTS = {
+	"Optics",
+	"Barrel",
+	"Underbarrel",
+	"Other",
+	"Stock";
+	"Bolt"
+}
 local gunAC0 = nil
 local db = {
 	["Melee"] = false;
@@ -25,6 +33,7 @@ local itemTypes = {
 				"UsesAction";
 				"AcceptsAttachments";
 				"AITrigger";
+				"Aggregate";
 			};
 			SubTypeName = "Gun";
 			HUD = { 
@@ -296,6 +305,167 @@ local itemTypes = {
 				SetupStats = function(api, mApi)
 
 				end,
+				OnServerEquip = function(api, mApi)
+					local item = api.Item
+					local plr = mApi.Player
+					for _, v in (item:GetDescendants()) do
+						if v:IsA("BasePart") and not v:FindFirstAncestor("Magazine") then
+							v.Anchored = true
+						end
+					end
+					if not mApi.furnitures[item.Name] then
+						mApi.furnitures[item.Name] = {
+							furniture = "";
+							alloy = "";
+						}
+					end		
+					if mApi.AttachmentLibrary[item.Name] then
+						for  _, slot2 in PRE_ASSEMBLE_SLOTS do
+							local attObj = AttachmentsList[mApi.AttachmentLibrary[item.Name][slot2].Name]
+							if attObj then
+								Attachment.ClearWeaponSlot(item, plr, slot2, attObj.Type)
+							end
+						end
+					end
+					local boltWelds do
+						local assembler = PseudoInstance.new("GunAssembler")
+						assembler:Assemble(item, {
+							attachments = mApi.AttachmentLibrary[item.Name];
+							furniture = mApi.furnitures[item.Name].furniture;
+							alloy = mApi.furnitures[item.Name].alloy;									
+							player = plr;
+						})
+						boltWelds = assembler.BoltWelds 
+						assembler:Destroy()
+						assembler = nil
+					end
+					mApi.RemoteService.send("Client",plr,"SetupBolts",boltWelds,item)
+					item.HoldPart.Anchored = false
+					item.HoldPart.CanCollide = true
+
+					pcall(function()
+						local SET = require(item.SETTINGS)
+						mApi.Grips.Right.Part1 = item.HoldPart
+						mApi.Grips.Right.C1 = SET.equipSettings.GripC1
+						if item:FindFirstChild("DmgPoint",true) and item.Type.Value == "Gun" then
+							print("Bayonet Detected")
+							mApi.setBayonet(item, mApi.Melee:AddWeaponS(item,plr))
+						end
+					end)
+					if not item:GetAttribute("FireMode") then
+						local S = require(item.SETTINGS)
+						item:SetAttribute("FireMode", S.defaultMode:upper())
+					end
+					--local unitO = PseudoInstance.new(plr:GetAttribute("Unit"))
+					local S = require(item.SETTINGS)
+					if not mApi.MagazineLibrary[item.Name] then
+						local UsableMags = S.reloadSettings
+						if UsableMags then
+							UsableMags = UsableMags.usableMags
+							if UsableMags then
+								mApi.setMagazine(plr, item, UsableMags[1])
+							end
+						end
+					end
+					local mag = mApi.MagazinesList[mApi.MagazineLibrary[item.Name]]
+					--local unit = plr:GetAttribute("Unit")
+					--local unitO = PseudoInstance.new(unit)
+					mag:UpdateMetadata(item,unitO,mApi.InventoryService,plr,mApi.Character)
+					if item:FindFirstChild("Grenade") then
+						mag:reassembleGrenade(item)
+					end
+					if S.reloadSettings.attachMagOnServer then
+						local mag2 = mag:getMag(true)
+						if mag2 then
+							mag:Apply(item,mag2)
+						end
+					end
+					mApi.Character:SetAttribute("walkPenalty",item:GetAttribute("Penalty") + item:GetAttribute("UnitPenalty"))
+					mApi.Janitor:Add(item:GetAttributeChangedSignal("Penalty"):Connect(function()
+						mApi.Character:SetAttribute("walkPenalty",item:GetAttribute("Penalty") + item:GetAttribute("UnitPenalty"))
+					end),"Disconnect",plr.Name.."WalkPenCon")
+					do
+						local SET = require(item.SETTINGS)
+						if SET then
+							if SET.barrelOverheat then
+								item:SetAttribute("Heat",0)
+							end
+						end
+					end
+
+					if mApi.AttachmentLibrary[item.Name] then
+						for k, v in pairs(mApi.AttachmentLibrary[item.Name]) do
+							if v.Name ~= "" then
+								local att = Resources:GetGunAttachment(v.Name)
+								if att then
+									local anims = att:FindFirstChild("ANIMATIONS")
+									if anims then
+										item:SetAttribute(k.."Anims",anims.Parent.Name)
+									elseif att:FindFirstChild("POSES") then
+										item:SetAttribute(k.."Poses",att.Name)
+									end
+								end
+								local att2 = AttachmentsList[v.Name]
+								if att2 then
+									if att2.Type:find("Laser") then
+										item:SetAttribute("LaserIndex", 0)	
+										game.CollectionService:AddTag(item,"LasersOn")
+										item:SetAttribute("LaserType", att2.ExtraData.LaserType or "Regular");
+									end
+								end
+							end
+						end
+						if mApi.AttachmentLibrary[item.Name].Underbarrel.Name then
+							local atName = mApi.AttachmentLibrary[item.Name].Underbarrel.Name
+							if atName then
+								local att = AttachmentsList[atName]
+								if att then
+									if att.Type == "GrenadeLauncher" then
+										if not item:GetAttribute("Grenades") then
+											for i = 1, 8 * (unitO.UnderslungGM or 1) do
+												--_G.Inventories[plr]:AddItem(att.ExtraData.Caliber)
+											end
+
+											item:SetAttribute("Grenades",8 * (unitO.UnderslungGM or 1))
+											item:SetAttribute("GrenadesReady",true)
+											item:SetAttribute("CurrentGrenade",att.ExtraData.Caliber)
+
+										end
+									end
+								end
+							end
+						end
+					end
+					for _, vp in  item:GetChildren() do
+						if vp:FindFirstChild("FireSound") then
+							local c = mApi.Cartridges[mag.CartridgeName]
+							vp.FireSound.SoundGroup = game.SoundService.SettingSounds.Game_FX
+							vp.FireSound.RollOffMinDistance = (c.Range / 10) + 1
+							vp.FireSound.RollOffMaxDistance = (c.Range / 10) + 1
+							if vp:FindFirstChild("EchoSound") then
+								vp.EchoSound.SoundGroup = game.SoundService.SettingSounds.Game_FX
+								vp.EchoSound.RollOffMaxDistance = c.Range * 2
+								vp.EchoSound.RollOffMinDistance = (c.Range / 5)
+							end
+						end	
+					end
+					local itemSettings = require(item.SETTINGS)
+
+					item.FOV.Value = itemSettings.aimSettings.InFOV
+					if mApi.AttachmentLibrary[item.Name] then
+						local OpticsAttachment = mApi.AttachmentLibrary[item.Name]["Optics"].Name
+						if (#OpticsAttachment > 0) then
+							local att = AttachmentsList[OpticsAttachment] 
+							item.FOV.Value = att.ExtraData.FOV or itemSettings.aimSettings.InFOV
+
+							--local uiReady = mApi.RemoteService.fetch("Client",plr,"WaitForHC")
+							--mApi.RemoteService.send("Client",plr,"SetScopeId",att.ExtraData.Scope)
+						else
+							item.FOV.Value = itemSettings.aimSettings.InFOV
+							--mApi.RemoteService.send("Client",plr,"SetScopeId","")
+						end
+					end
+				end,
 				CanDisplayTier = function(api, mApi)
 					local tier = mApi.Tier
 					if mApi.Settings.acceptedSlots then
@@ -417,6 +587,7 @@ local itemTypes = {
 				"DistanceDamage";
 				"Dispose";
 				"AITrigger";
+				"Aggregate";
 			};
 			HUD = { 
 				InitContext = function(hudObj)
@@ -740,6 +911,154 @@ local itemTypes = {
 					mApi.tween("Joint",mApi.ViewModel.RWeld, false,api:getArmPos("unAimed","Right"), mApi.getAlpha("OutSine"), mApi.S.equipSettings.Time)
 					mApi.tween("Joint",mApi.ViewModel.Grips.Right, false, api:getArmPos("unAimed","Grip"), mApi.getAlpha("OutSine"), mApi.S.equipSettings.Time)
 				end,
+				OnServerEquip = function(api, mApi)
+					local item = api.Item
+					local plr = mApi.Player
+					for _, v in (item:GetDescendants()) do
+						if v:IsA("BasePart") and not v:FindFirstAncestor("Magazine") then
+							v.Anchored = true
+						end
+					end
+					if not mApi.furnitures[item.Name] then
+						mApi.furnitures[item.Name] = {
+							furniture = "";
+							alloy = "";
+						}
+					end		
+					if mApi.AttachmentLibrary[item.Name] then
+						for  _, slot2 in PRE_ASSEMBLE_SLOTS do
+							local attObj = AttachmentsList[mApi.AttachmentLibrary[item.Name][slot2].Name]
+							if attObj then
+								Attachment.ClearWeaponSlot(item, plr, slot2, attObj.Type)
+							end
+						end
+					end
+					local boltWelds do
+						local assembler = PseudoInstance.new("GunAssembler")
+						assembler:Assemble(item, {
+							attachments = mApi.AttachmentLibrary[item.Name];
+							furniture = mApi.furnitures[item.Name].furniture;
+							alloy = mApi.furnitures[item.Name].alloy;									
+							player = plr;
+						})
+						boltWelds = assembler.BoltWelds 
+						assembler:Destroy()
+						assembler = nil
+					end
+					mApi.RemoteService.send("Client",plr,"SetupBolts",boltWelds,item)
+					item.HoldPart.Anchored = false
+					item.HoldPart.CanCollide = true
+
+					pcall(function()
+						local SET = require(item.SETTINGS)
+						mApi.Grips.Right.Part1 = item.HoldPart
+						mApi.Grips.Right.C1 = SET.equipSettings.GripC1
+						if item:FindFirstChild("DmgPoint",true) and item.Type.Value == "Gun" then
+							print("Bayonet Detected")
+							mApi.setBayonet(item, mApi.Melee:AddWeaponS(item,plr))
+						end
+					end)
+					if not item:GetAttribute("FireMode") then
+						local S = require(item.SETTINGS)
+						item:SetAttribute("FireMode", S.defaultMode:upper())
+					end
+					local unitO = PseudoInstance.new(plr:GetAttribute("Unit"))
+					if item.LauncherType.Value == "Grenade" then
+						if not item:GetAttribute("GrenadeSet") then
+							item:SetAttribute("GrenadeSet", true)
+							local S = require(item.SETTINGS)
+							item:SetAttribute("CurrentGrenade", S.reloadSettings.usableGrenade)
+							item:SetAttribute("Grenades", 20)
+							item:SetAttribute("MagType", item:GetAttribute("CurrentGrenade"))
+							item:SetAttribute("GrenadesReady",true)
+
+						end
+						if item:FindFirstChild("Grenade") then
+							item:SetAttribute("GrenadesReady",true)
+						end 
+					else
+						local mag = mApi.MagazinesList[api.MagazineLibrary[item.Name]]
+						local S = require(item.SETTINGS)
+						local unit = plr:GetAttribute("Unit")
+						local unitO = PseudoInstance.new(unit)
+						if item:FindFirstChild("Grenade") then
+							mag:reassembleGrenade(item)
+						end
+						mag:UpdateMetadata(item,unitO,mApi.InventoryService,plr,mApi.Character)
+
+						if S.reloadSettings.attachMagOnServer then
+							local mag2 = mag:getMag(true)
+							if mag2 then
+								mag:Apply(item,mag2,plr)
+							end
+						end
+						mApi.Character:SetAttribute("walkPenalty",item:GetAttribute("Penalty") + item:GetAttribute("UnitPenalty"))
+						mApi.Janitor:Add(item:GetAttributeChangedSignal("Penalty"):Connect(function()
+							mApi.Character:SetAttribute("walkPenalty",item:GetAttribute("Penalty") + item:GetAttribute("UnitPenalty"))
+						end),"Disconnect",plr.Name.."WalkPenCon")
+						do
+							local SET = require(item.SETTINGS)
+							if SET then
+								if SET.barrelOverheat then
+									item:SetAttribute("Heat",0)
+								end
+							end
+						end
+						if mApi.AttachmentLibrary[item.Name] then
+							for k, v in pairs(mApi.AttachmentLibrary[item.Name]) do
+								if v.Name ~= "" then
+									local att = Resources:GetGunAttachment(v.Name)
+									if att then
+										local anims = att:FindFirstChild("ANIMATIONS")
+										if anims then
+											item:SetAttribute(k.."Anims",anims.Parent.Name)
+										elseif att:FindFirstChild("POSES") then
+											item:SetAttribute(k.."Poses",att.Name)
+										end
+									end
+									local att2 = AttachmentsList[v.Name]
+									if att2 then
+										if att2.Type:find("Laser") then
+											item:SetAttribute("LaserIndex", 0)	
+											game.CollectionService:AddTag(item,"LasersOn")
+											item:SetAttribute("LaserType", att2.ExtraData.LaserType or "Regular");
+										end
+									end
+								end
+							end
+							if mApi.AttachmentLibrary[item.Name].Underbarrel.Name then
+								local atName = mApi.AttachmentLibrary[item.Name].Underbarrel.Name
+								if atName then
+									local att = AttachmentsList[atName]
+									if att then
+										if att.Type == "GrenadeLauncher" then
+											if not item:GetAttribute("Grenades") then
+												for i = 1, 8 * (unitO.UnderslungGM or 1) do
+													_G.Inventories[plr]:AddItem(att.ExtraData.Caliber)
+												end
+												item:SetAttribute("Grenades",8 * (unitO.UnderslungGM or 1))
+												item:SetAttribute("GrenadesReady",true)
+												item:SetAttribute("CurrentGrenade",att.ExtraData.Caliber)
+
+											end
+										end
+									end
+								end
+							end
+						end
+						for _, vp in  item:GetChildren() do
+							if vp:FindFirstChild("FireSound") then
+								vp.FireSound.SoundGroup = game.SoundService.SettingSounds.Game_FX
+								vp.EchoSound.SoundGroup = game.SoundService.SettingSounds.Game_FX
+								local c = mApi.Cartridges[mag.CartridgeName]
+								vp.FireSound.RollOffMinDistance = (c.Range / 20) + 1
+								vp.FireSound.RollOffMaxDistance = (c.Range / 10) + 1
+								vp.EchoSound.RollOffMaxDistance = c.Range * 2
+								vp.EchoSound.RollOffMinDistance = (c.Range / 10) + 1
+							end	
+						end
+					end
+				end,
 				Aimed = function(api, mApi)
 					local partlist = {
 						mApi.ViewModel.armModel;
@@ -906,6 +1225,24 @@ local itemTypes = {
 				CanDisplayTier = function(api, mApi)
 					return false
 				end,
+				OnServerEquip =  function(api, mApi)
+					local item = api.Item
+					local plr = mApi.Player
+					do
+						local assembler = PseudoInstance.new("BladeAssembler")
+						assembler:Assemble(item, {
+						})
+						assembler:Destroy()
+						assembler = nil
+					end
+					item.HoldPart.Anchored = false
+					item.HoldPart.CanCollide = true
+					local _, err = pcall(function()
+						local SET = require(item.SETTINGS)
+						mApi.Grips.Right.Part1 = item.HoldPart
+						mApi.Grips.Right.C1 = SET.equipSettings.GripC1
+					end)
+				end,
 			};
 		};
 		["Grenade"] = {
@@ -1018,6 +1355,24 @@ local itemTypes = {
 				CanDisplayTier = function(api, mApi)
 					local tier = mApi.Tier
 					return tier.ClassName == "GrenadeTier" 
+				end,
+				OnServerEquip =  function(api, mApi)
+					local item = api.Item
+					local plr = mApi.Player
+					do
+						local assembler = PseudoInstance.new("GrenadeAssembler")
+						assembler:Assemble(item, {
+						})
+						assembler:Destroy()
+						assembler = nil
+					end
+					item.HoldPart.Anchored = false
+					item.HoldPart.CanCollide = true
+					local _, err = pcall(function()
+						local SET = require(item.SETTINGS)
+						mApi.Grips.Right.Part1 = item.HoldPart
+						mApi.Grips.Right.C1 = SET.equipSettings.GripC1
+					end)
 				end,
 			};
 			Projectile = {

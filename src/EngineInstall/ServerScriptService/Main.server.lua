@@ -2,13 +2,13 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local PhysicsService = game:GetService("PhysicsService")
 local Lighting = game:GetService("Lighting")
+local Players = game:GetService("Players")
 local Resources = require(ReplicatedStorage:WaitForChild("Resources",10))
 -- Setup your flags here
 Resources:SetupFlags({
 
 })
 -- Necessary Modules
-local Players = game:GetService("Players")
 local RemoteService = Resources:LoadLibrary("RemoteService")
 local EventSystem = Resources:LoadLibrary("EventUtils")
 local createViewModel = Resources:LoadLibrary("createViewModel")
@@ -21,6 +21,10 @@ local Janitor = Resources:LoadLibrary("Janitor")
 local PseudoInstance = Resources:LoadLibrary("PseudoInstance")
 local Lerps = Resources:LoadLibrary("Lerps")
 local Tween = Resources:LoadLibrary("Tween")
+local Signal = Resources:LoadLibrary("Signal")
+local MathRound = Resources:LoadLibrary("MathRound")
+local WeaponUtils = Resources:LoadLibrary("WeaponUtils")
+local Cartridges =  Resources:LoadConfiguration("Cartridges")
 
 -- Event System + Server Plugins 
 local ServerSettings = require(script.Parent.ServerSettings)
@@ -53,8 +57,98 @@ local gunIgnores = {};
 local animWelds = {};
 local ragdolls = {};
 local jans = {};
+local MagazineLibraries = {};
+local AttachmentLibraries = {};
+
 ------
 function runInit(plr: Player)
+	AttachmentLibraries[plr] = {}
+	MagazineLibraries[plr] = {}
+	furnitures[plr] = {};
+	local function aggregateWeapon(item, useMags)
+		if  WeaponUtils:HasItemCapability(item, "Aggregate") then
+			AttachmentLibraries[plr][item.Name] = {};
+			for _, v in ipairs(AttachmentModules.Slots) do
+				AttachmentLibraries[plr][item.Name][v] = {
+					Name = "";
+					CFrame = CF();
+					Options = {};
+				};
+
+			end
+			local UsableMags = require(item.SETTINGS)
+			if UsableMags then
+				if UsableMags.defaultAttachments then
+					for k, v in ipairs(UsableMags.defaultAttachments) do
+						local att = AttachmentsList[v]
+						if att then
+							AttachmentLibraries[plr][item.Name][att.Slot].Name = v;
+						end		
+					end
+				end
+				local list = saveGames[plr]:GetAllAttachmentsForWeapon(item.Name)
+				for i, v in ipairs(list) do
+					AttachmentLibraries[plr][item.Name][v.Slot].Name = v.Name;
+					if v.CF then
+						AttachmentLibraries[plr][item.Name][v.Slot].CFrame = CF(v.CF.X, v.CF.Y, v.CF.Z)
+					end
+					if v.Slot == "Optics" then
+						if AOptions[v.Name] then
+							if #AttachmentLibraries[plr][item.Name][v.Slot].Options <= 0 then
+								AttachmentLibraries[plr][item.Name][v.Slot].Options = AOptions[v.Name].DefaultOptions
+							end
+						end
+					end
+				end
+				if useMags then
+					UsableMags = UsableMags.reloadSettings
+					if UsableMags then
+						UsableMags = UsableMags.usableMags
+						if UsableMags then
+							MagazineLibraries[plr][item.Name] = UsableMags[1]
+						end
+					end
+				end
+			end
+			if item.Type.Value == "Gun" or item.Type.Value == "Launcher"  then
+				furnitures[plr][item.Name] = {
+					furniture = "";
+					alloy = "";
+				}	
+			end	
+		elseif item.Type.Value == "Grenade" then
+			if item.GrenadeType.Value == "Smoke" then
+				local S = require(item.SETTINGS)
+				if S.smokeValues then
+					item:SetAttribute("SmokeColor", S.smokeValues[1].Name)
+				end
+			end
+		end
+	end
+	if RunService:IsStudio() then
+		for _, itemObj in ipairs(ReplicatedStorage.Resources.Items:GetChildren()) do
+			if not itemObj:FindFirstChild("Type") then
+				continue
+			end
+			aggregateWeapon(itemObj, itemObj:FindFirstChild("MagPoint") or itemObj:FindFirstChild("MagPointNode"))
+			--table.insert(saveGames[plr]:GetSettings().Inventory,itemObj.Name)		
+		end
+	else
+		for itemName, _ in pairs(Starters) do
+			local item = Resources:PtrItem(itemName)
+			if item then
+				aggregateWeapon(item, item:FindFirstChild("MagPoint") or item:FindFirstChild("MagPointNode"))
+				--table.insert(saveGames[plr]:GetSettings().Inventory,item.Name)		
+			end
+		end
+		for  _, itemName in ipairs(saveGames[plr].Unlocks) do
+			local item = Resources:PtrItem(itemName)
+			if item then
+				aggregateWeapon(item, item:FindFirstChild("MagPoint") or item:FindFirstChild("MagPointNode"))
+				--table.insert(saveGames[plr]:GetSettings().Inventory,item.Name)		
+			end
+		end
+	end 
 	plr.CharacterAdded:Connect(function(c)
 		local head = c:WaitForChild("Head",200)
 		local torso  = c:WaitForChild("Torso",200)
@@ -84,6 +178,45 @@ function runInit(plr: Player)
 		c:WaitForChild("Humanoid", 200)
 		ragdolls[plr] = PseudoInstance.new("Ragdoll",c)
 		fastSpawn(function() ragdolls[plr]:Setup() end)
+		jans[plr]:Add(EventUtils:ConnectEvent("ItemEquipped", function(char,item)
+			if char == c then
+				WeaponUtils:RunHook(item, "OnServerEquip", {
+					Item = item;	
+				}, {
+					furnitures = furnitures[plr];
+					AttachmentLibrary = AttachmentLibraries[plr];
+					Player = plr;
+					Character = c;
+					Grips = Grips[plr];
+					RemoteService = RemoteService;
+					--[[setBayonet = function(item, val)
+						bayonets[item] = val;
+					end,]]--
+					MagazinesList = MagazinesList;
+					MagazineLibrary = MagazineLibraries[plr];
+					--InventoryService = InventoryService;
+					Janitor = jans[plr];
+					fillGrenadeCrate = function(plr2)
+						--fillGrenadeCrate(plr2, PlayerLoadouts)
+					end;
+					setMagazine = function(plr2, item2, mag)
+						MagazineLibraries[plr2][item2.Name] = mag
+					end,
+					Cartridges = Cartridges;
+					
+				})
+			end			
+		end), "Disconnect")
+		jans[plr]:Add(c.ChildAdded:connect(function(item)
+			if c.Parent.Name == "SheathedWeapons" then
+				return
+			end
+			if item:IsA("Model") then
+				if item:FindFirstChild("Type") then
+					EventUtils:FireEvent("ItemEquipped", c, item)
+				end
+			end
+		end),"Disconnect")
 		jans[plr]:Add(c.Humanoid.Died:Connect(function()
 			c:SetAttribute("FaceState","Dead")
 			for i, grip in pairs(Grips[plr]) do
@@ -254,12 +387,15 @@ task.spawn(function()
 				fastSpawn = fastSpawn;
 				FastDelay = FastDelay;
 				Janitor = Janitor;
+				Signal = Signal;
+				Math = {
+					Round = MathRound;
+				}
 			}, Resources:GetLocalTable("Components"))
 		end
 	end
 end)
 -----
-print(Resources:FindGlobalFeature("DayNightCycle"))
 if Resources:FindGlobalFeature("DayNightCycle") then
 	PhotoSiris:SetupClock(Lighting.ClockTime)
 	PhotoSiris:StartCycle()

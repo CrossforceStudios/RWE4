@@ -429,7 +429,9 @@ function Magazine:UpdateMetadata(item, unitO, IS, player, c)
 			item:SetAttribute("AmmoInd",(S.shotCapacity or self.Size) * (S.maxShotCount or self.MaxCount))
 		end
 		item:SetAttribute("Penalty",0)
-		item:SetAttribute("UnitPenalty",unitO.SpeedPenalty)
+		if unitO then
+			item:SetAttribute("UnitPenalty",unitO.SpeedPenalty)
+		end
 		if item:GetAttribute("Fresh") then
 			for _, mag in c.Magazines:GetChildren() do
 				if mag.Name == item:GetAttribute("MagType") then
@@ -450,9 +452,9 @@ function Magazine:UpdateMetadata(item, unitO, IS, player, c)
 		end
 		if item:FindFirstChild("GunType") then
 			if IS.WeaponSet.IsRifle(item.GunType.Value) then
-				item:SetAttribute("Mags", math.clamp(item:GetAttribute("Mags") + (unitO.MagBonusP or 0),1,20))
+				item:SetAttribute("Mags", math.clamp(item:GetAttribute("Mags"),1,20))
 			else
-				item:SetAttribute("Mags", math.clamp(item:GetAttribute("Mags") + (unitO.MagBonusS or 0),1,20))
+				item:SetAttribute("Mags", math.clamp(item:GetAttribute("Mags"),1,20))
 			end
 		elseif item:FindFirstChild("LauncherType") then
 			if item.LauncherType.Value ~= "Disposable" then
