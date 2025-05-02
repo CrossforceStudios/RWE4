@@ -2,7 +2,8 @@ return function(RWE4,Plugin,EditorLibraries,Libraries,loader,RBLXGUI,EI)
 
     local control = {};
     control.UI = nil;
-    control.
+    control.Active = false
+    control.Initiated = false
     function control:CreateWidget()
         local ui = RBLXGUI.PluginWidget.new({
             ID = "RWE4_Macros";
