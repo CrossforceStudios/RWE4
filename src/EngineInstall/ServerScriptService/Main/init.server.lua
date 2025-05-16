@@ -24,7 +24,10 @@ local Tween = Resources:LoadLibrary("Tween")
 local Signal = Resources:LoadLibrary("Signal")
 local MathRound = Resources:LoadLibrary("MathRound")
 local WeaponUtils = Resources:LoadLibrary("WeaponUtils")
-local Cartridges =  Resources:LoadConfiguration("Cartridges")
+--- Configs
+local AttachmentsList = Resources:LoadConfiguration("Attachment")
+local Cartridges =  Resources:LoadConfiguration("Cartridge")
+local AttachmentModules = Resources:LoadConfiguration("AttachmentModules")
 
 -- Event System + Server Plugins 
 local ServerSettings = require(script.Parent.ServerSettings)
@@ -59,6 +62,7 @@ local ragdolls = {};
 local jans = {};
 local MagazineLibraries = {};
 local AttachmentLibraries = {};
+local furnitures = {};
 
 ------
 function runInit(plr: Player)
@@ -71,7 +75,7 @@ function runInit(plr: Player)
 			for _, v in ipairs(AttachmentModules.Slots) do
 				AttachmentLibraries[plr][item.Name][v] = {
 					Name = "";
-					CFrame = CF();
+					CFrame = CFrame.new();
 					Options = {};
 				};
 

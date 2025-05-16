@@ -1,5 +1,5 @@
 return function(RWE4,Plugin,EditorLibraries,Libraries,loader,RBLXGUI,EI)
-
+    local PluginShared = require(script.Libraries.Shared)
     local control = {};
     control.UI = nil;
     control.Active = false
@@ -33,13 +33,11 @@ return function(RWE4,Plugin,EditorLibraries,Libraries,loader,RBLXGUI,EI)
         
         self.Active = false
         self.Widget.Enabled = false
-        self.RefreshButton.Enabled = false
-        self.WidgetButton:SetActive(false)
     end
 
     return {
 		Title = "Macros";
-		Icon = "rbxassetid://17210895174";
+		Icon = "rbxassetid://95866080";
 		OnSelect = function()
             if RWE4.CurrentModule == script.Name then
                 return	

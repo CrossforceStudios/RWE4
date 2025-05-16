@@ -3,6 +3,7 @@ return {
     Events = {
         "KillAdded";
         "PlayerAdded";
+		"ItemEquipped";
     };
     CollisionPairs = {
 		{"PlayerRagdoll", "HRPRagdoll", false};
