@@ -1,6 +1,8 @@
 local Resources = require(game.ReplicatedStorage.Resources)
 local PseudoInstance = Resources:LoadLibrary("PseudoInstance") 
 local CartridgeList = Resources:LoadConfiguration("Cartridge") 
+local Attachment = Resources:LoadLibrary("Attachment")
+local AttachmentsList = Resources:LoadConfiguration("Attachment")
 
 local ch = require(script.CommonHooks)
 local SMOKE_NADE_COLOR_NAMES = {"Bright red";BrickColor.White().Name;"Bright orange";"Bright yellow";"Bright green";"Bright blue";"Dark indigo";"Bright violet";}
@@ -10,8 +12,6 @@ local PRE_ASSEMBLE_SLOTS = {
 	"Barrel",
 	"Underbarrel",
 	"Other",
-	"Stock";
-	"Bolt"
 }
 local gunAC0 = nil
 local db = {
@@ -380,9 +380,9 @@ local itemTypes = {
 							mag:Apply(item,mag2)
 						end
 					end
-					mApi.Character:SetAttribute("walkPenalty",item:GetAttribute("Penalty") + item:GetAttribute("UnitPenalty"))
+				mApi.Character:SetAttribute("walkPenalty",item:GetAttribute("Penalty") + (item:GetAttribute("UnitPenalty") or 0))
 					mApi.Janitor:Add(item:GetAttributeChangedSignal("Penalty"):Connect(function()
-						mApi.Character:SetAttribute("walkPenalty",item:GetAttribute("Penalty") + item:GetAttribute("UnitPenalty"))
+						mApi.Character:SetAttribute("walkPenalty",item:GetAttribute("Penalty") + (item:GetAttribute("UnitPenalty") or 0))
 					end),"Disconnect",plr.Name.."WalkPenCon")
 					do
 						local SET = require(item.SETTINGS)

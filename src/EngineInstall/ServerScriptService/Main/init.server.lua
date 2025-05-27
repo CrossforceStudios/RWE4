@@ -24,11 +24,14 @@ local Tween = Resources:LoadLibrary("Tween")
 local Signal = Resources:LoadLibrary("Signal")
 local MathRound = Resources:LoadLibrary("MathRound")
 local WeaponUtils = Resources:LoadLibrary("WeaponUtils")
+local InventoryService = Resources:LoadLibrary("InventoryService")
+
 --- Configs
 local AttachmentsList = Resources:LoadConfiguration("Attachment")
+local AOptions = Resources:LoadConfiguration("AttachmentGroups")
 local Cartridges =  Resources:LoadConfiguration("Cartridge")
 local AttachmentModules = Resources:LoadConfiguration("AttachmentModules")
-
+local MagazinesList = Resources:LoadConfiguration("Magazine")
 -- Event System + Server Plugins 
 local ServerSettings = require(script.Parent.ServerSettings)
 for _, event in ServerSettings.Events do
@@ -90,18 +93,25 @@ function runInit(plr: Player)
 						end		
 					end
 				end
-				local list = saveGames[plr]:GetAllAttachmentsForWeapon(item.Name)
-				for i, v in ipairs(list) do
-					AttachmentLibraries[plr][item.Name][v.Slot].Name = v.Name;
-					if v.CF then
-						AttachmentLibraries[plr][item.Name][v.Slot].CFrame = CF(v.CF.X, v.CF.Y, v.CF.Z)
-					end
-					if v.Slot == "Optics" then
-						if AOptions[v.Name] then
-							if #AttachmentLibraries[plr][item.Name][v.Slot].Options <= 0 then
-								AttachmentLibraries[plr][item.Name][v.Slot].Options = AOptions[v.Name].DefaultOptions
-							end
-						end
+				for _, pl in ServerPlugins do
+					if pl.OnAggregateWeapon then
+						pl.OnAggregateWeapon({
+							setOptions = function(attr)
+								if AOptions[attr.Name] then
+									if #AttachmentLibraries[plr][item.Name][attr.Slot].Options <= 0 then
+										AttachmentLibraries[plr][item.Name][attr.Slot].Options = AOptions[attr.Name].DefaultOptions
+									end
+								end
+							end,
+							setCFrame = function(attr)
+								AttachmentLibraries[plr][item.Name][attr.Slot].CFrame = CFrame.new(attr.CF.X, attr.CF.Y, attr.CF.Z)
+							end,
+							setName = function(attr)
+								AttachmentLibraries[plr][item.Name][attr.Slot].Name = attr.Name;
+							end,
+							Item = item;
+							Player = plr;
+						},Resources:GetLocalTable("Components"))
 					end
 				end
 				if useMags then
@@ -182,7 +192,7 @@ function runInit(plr: Player)
 		c:WaitForChild("Humanoid", 200)
 		ragdolls[plr] = PseudoInstance.new("Ragdoll",c)
 		fastSpawn(function() ragdolls[plr]:Setup() end)
-		jans[plr]:Add(EventUtils:ConnectEvent("ItemEquipped", function(char,item)
+		jans[plr]:Add(EventSystem:ConnectEvent("ItemEquipped", function(char,item)
 			if char == c then
 				WeaponUtils:RunHook(item, "OnServerEquip", {
 					Item = item;	
@@ -198,7 +208,7 @@ function runInit(plr: Player)
 					end,]]--
 					MagazinesList = MagazinesList;
 					MagazineLibrary = MagazineLibraries[plr];
-					--InventoryService = InventoryService;
+					InventoryService = InventoryService;
 					Janitor = jans[plr];
 					fillGrenadeCrate = function(plr2)
 						--fillGrenadeCrate(plr2, PlayerLoadouts)
@@ -217,7 +227,7 @@ function runInit(plr: Player)
 			end
 			if item:IsA("Model") then
 				if item:FindFirstChild("Type") then
-					EventUtils:FireEvent("ItemEquipped", c, item)
+					EventSystem:FireEvent("ItemEquipped", c, item)
 				end
 			end
 		end),"Disconnect")
@@ -257,10 +267,10 @@ function runInit(plr: Player)
 			]]--
 
 			fastSpawn(function()
-				FastWait(3)
+				task.wait(3)
 
 				RemoteService.bounceOthers("Client",plr,"FadeCharacter",c,3)
-				FastWait(3)
+				task.wait(3)
 			end)
 			jans[plr]:Cleanup()
 			jans[plr]:Destroy()

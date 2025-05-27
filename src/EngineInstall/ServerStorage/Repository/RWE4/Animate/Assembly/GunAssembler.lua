@@ -262,6 +262,7 @@ local ItemAssembler = PseudoInstance:Register("GunAssembler",{
 					for _, v in ipairs(item:GetChildren()) do
 						if v:IsA("BasePart") and (not v:HasTag("AttachmentPart")) then
 							if self.CFrames[v] then
+								print(v.Name,"Pos:",self.CFrames[v])
 								v.CFrame = Handle.CFrame * self.CFrames[v]
 							end
 							if inList(v.Name,self.WeapBuilder.WeldedParts) then
@@ -292,12 +293,11 @@ local ItemAssembler = PseudoInstance:Register("GunAssembler",{
 							end
 						end
 					end
-					self.CFrames = {}
 					local sType = WeaponUtils:GetSubType(item)
 					if extras.attachments then
 						for slot,attachmentName in pairs(extras.attachments) do
 							local newAttachment = AttachmentsList[attachmentName.Name]
-							if newAttachment and  inList(slot,{"Stock";}) then
+							if newAttachment and  inList(slot,{"Stock";"Optics"}) then
 								newAttachment:AddWeapon(item.Name)
 								if not extras.player then
 									newAttachment:ApplyAI(item,"HoldPart")
@@ -341,7 +341,7 @@ local ItemAssembler = PseudoInstance:Register("GunAssembler",{
 										if v:FindFirstChild("ReceiverAttach") and item:FindFirstChild("Receiver") then
 											wPart = item.Receiver
 										end
-										if v.Name == "SafetyEffector" then
+										if v.Name == "SafetyEffector" or v.Name == "SelectorEffector" then
 											if v:FindFirstChild("BoltRole") then
 												wPart = self:findBolt(item,v.BoltRole.Value)
 											end
@@ -399,6 +399,7 @@ local ItemAssembler = PseudoInstance:Register("GunAssembler",{
 										end
 										newAttachment:Apply(item,"HoldPart",extras.player,false,attachmentName.CFrame)
 									end
+								
 								end
 							end
 						end
@@ -467,7 +468,7 @@ local ItemAssembler = PseudoInstance:Register("GunAssembler",{
 						if extras.attachments then
 							for slot,attachmentName in pairs(extras.attachments) do
 								local newAttachment = AttachmentsList[attachmentName.Name]
-								if newAttachment and not inList(slot,{"MagPoint";"StorageLeft";"Stock";"Bolt";}) then
+								if newAttachment and not inList(slot,{"MagPoint";"StorageLeft";"Stock";"Bolt";"Optics"}) then
 									newAttachment:AddWeapon(item.Name)
 									if not extras.player then
 										if (not item:FindFirstChild("Lid")) or slot ~= "Optics"  then
@@ -505,6 +506,23 @@ local ItemAssembler = PseudoInstance:Register("GunAssembler",{
 								end
 							end
 						end
+						task.spawn(function()
+							local timeout = 20
+							local t = 0
+							repeat t +=  task.wait(1) if t >= timeout then break end until item:IsDescendantOf(workspace)
+							if item:IsDescendantOf(workspace) then
+								for _, v in item:GetChildren() do
+									for  _, v2 in (v:GetChildren()) do
+										if v2:IsA("JointInstance") then
+											if not v2.Active then
+												v2:Destroy()
+											end
+										end
+									end
+								end
+							end
+						end)
+					
 					end	
 
 				end
@@ -636,7 +654,7 @@ local ItemAssembler = PseudoInstance:Register("GunAssembler",{
 						self.sheatheModel:SetAttribute("AmmoInd", item:GetAttribute("AmmoInd"))
 						self.sheatheModel:SetAttribute("GaugeIndex", item:GetAttribute("GaugeIndex"))
 						local magNew = Magazines[item:GetAttribute("MagType")]
-						if magNew then
+						if magNew and player then
 							local mag = magNew:getMag(true, player)
 							magNew:ApplyFake(self.sheatheModel, mag, player)	
 						end	

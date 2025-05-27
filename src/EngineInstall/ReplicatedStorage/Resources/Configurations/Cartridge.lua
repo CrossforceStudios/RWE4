@@ -11,6 +11,7 @@ local Cartridges = {
 	Args = {
         -- Format: {Name,Title,Range,Hitscan,Velocity,TracerColor,0,Vector3.new(0.1,0.1,5),196.2 * 0.15,0.15,NumberRange.new(32,50),0.25,0.55};
 		--Example: ["7.62x39mm"] = {"7.62x39mm","7.62x39mm (M43)",689,false,1408,BrickColor.new("Really red"),0,Vector3.new(0.1,0.1,5),196.2 * 0.15,0.15,NumberRange.new(32,50),0.25,0.55};
+		["Laser"] = {"Laser","Auto Blaster Laser",689,false,1408,BrickColor.new("Really red"),0,Vector3.new(0.1,0.1,5),196.2 * 0.15,0.15,NumberRange.new(32,50),0.25,0.55};
 
 	};
 };
