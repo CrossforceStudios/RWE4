@@ -76,6 +76,9 @@ local Tween = Resources:LoadLibrary("Tween")
 local AndList = Resources:LoadLibrary("AndList")
 local FastWait = Resources:LoadLibrary("FastWait")
 local isIgnored = Resources:LoadLibrary("isIgnored")
+local WeaponUtils = Resources:LoadLibrary("WeaponUtils")
+local Signal = Resources:LoadLibrary("Signal")
+
 -- Shortcuts
 local VEC2 = Vector2.new
 local V3 = Vector3.new
@@ -83,12 +86,14 @@ local RAD = math.rad
 local RNG = Random.new()
 ----
 _G.CameraAng = VEC2(0,0)
+_G.gunRecoilSpring = Spring.new(0.45,15,V3())
+
 ----
 local UP_RATE = 0.05
 
 -- Important Client Parts
 local ClientSettings = require(script.Parent:WaitForChild("ClientSettings", 20))
-
+local ItemEquipped = Signal.new()
 local RenderEngine = {};
 local Connections = {};
 local ViewModel = {
@@ -113,7 +118,20 @@ local function getAlpha(easing)
 	return Enumeration.EasingFunction[easing].Value
 end
 ---------
+local lastSideRecoil = {0, 0}
+local  recoilAnim = {
+	Pos = V3();
+	Rot = V3();
+	Code = nil;
+}
+local  cRecoilAnim = {
+	Pos = V3();
+	Rot = V3();
+	Code = nil;
+}	
+
 do 
+	local swaySpring = Spring.new(1, 4, V3())
 	local stances = {} do
 		for k, stance in ClientSettings.Stances do
 			if stance.Value then
@@ -135,6 +153,7 @@ do
 	local function gunBobIdle(a, dt)
 		return ClientSettings.IdleAnimation(a, dt)
 	end
+	local aimAngle, NVGOffset = 0, CF.RAW()
 	local walkSpeedSpring = Spring.new(0.5,8,14)
 	local disabledStances = {};
 	local Stance = 0;
@@ -242,6 +261,7 @@ do
 				swaySpring.g = V3()
 			end,
 			swayCF = swaySpring;
+			MotionVector = MotionVector;
 			initialStockType = CurrentItem.stockType;
 			isPlayingAnim = function()
 				return CurrentItem:IsPlayingAnim();
@@ -379,6 +399,8 @@ do
 				Lean = v
 			elseif key == "leananim" then
 				return leanAnim
+			elseif key == "aimangle" then
+				aimAngle = v
 			end
 		end
 	})
@@ -388,12 +410,252 @@ do
 	local item = nil;
 	local S = nil;
 	local newMag = false;
-	
+	local Animations = {};
+	local Lasers = {}; 
+	local stockType = nil;
+	local AttachmentMods = Resources:LoadConfiguration("AttachmentModules")	
 	CurrentItem = setmetatable({
 		IsPlayingAnim = function(self)
 			return false
 		end,
-	},{})
+		getArmPos = function(self,pose,arm,invert)
+			local pos = self:getPose(pose)[arm:lower()]
+			local extraOffset = CF.RAW()
+			local result = pos
+			return result			
+		end;
+		getPose = function(self,poseN)
+			if poses[poseN] then
+				return poses[poseN]:GetAllPositions()
+			end
+			return nil
+		end;
+		LoadAnim = function(self,Item)
+			Animations = {};
+			poses = {};
+			if S.poses then
+				for _, pose in ipairs(S.poses) do
+					poses[pose.Name] = pose;
+				end
+			end
+			local anims =  require(Item.ANIMATIONS);
+			local anims2 = require(Resources:GetCustomAnim("Global"))
+			local anims4
+			if _G.GameMode == "Campaign" then
+				anims4 = require(Resources:GetCustomAnim("CampaignAnims"))
+			end
+			for name, anim in pairs(anims) do
+				Animations[name] = anim
+			end
+			for name, anim in pairs(anims2) do
+				Animations[name] = anim
+			end
+			if anims4 then
+				for name, anim in pairs(anims4) do
+					Animations[name] = anim
+				end
+			end
+
+			if S.defaultAttachment then
+				for _, anim3 in ipairs(S.defaultAttachments) do
+					local anims3 = Resources:GetGunAttachment(anim3)
+					if anims3 then
+						anims3= anims3:FindFirstChild("ANIMATIONS") 
+						if anims3 then
+							anims3 = require(anims3)
+							for name, anim in pairs(anims3) do
+								Animations[name] = anim
+							end								
+						end
+					end
+				end
+			end
+
+			for k, v in (AttachmentMods.Slots) do
+				local anims3 = item:GetAttribute(v.."Anims")
+				if anims3 then
+					anims3 = Resources:GetGunAttachment(anims3)
+					if anims3 then
+						anims3= anims3:FindFirstChild("ANIMATIONS") 
+						if anims3 then
+							anims3 = require(anims3)
+							print(anims3)
+							for name, anim in pairs(anims3) do
+								if self:isAnimBlacklisted(name) then
+									continue
+								end
+								Animations[name] = anim
+							end								
+						end
+					end
+				end
+				local anims3 = item:GetAttribute(v.."Poses")
+				if anims3 then
+					anims3 = Resources:GetGunAttachment(anims3)
+					if anims3:FindFirstChild("POSES") then
+						for _, v in ipairs(require(anims3.POSES)) do
+							poses[v.Name] = v
+						end
+					end
+				end
+
+			end
+		end;
+		PrepareItem = function(self)
+			--[[
+			if WeaponUtils:HasItemCapability(item, "Healer") then
+				if _G.HM then
+					_G.HM:GetModule("MedicalExaminer"):PopulateKit()
+				end
+			end
+			if WeaponUtils:HasItemCapability(item, "Builder") then
+				_G.HM:SetupBuilder()
+				InputComp.ToggleMouseControl(true, false)
+
+			end
+			if WeaponUtils:HasItemCapability(item, "HandSwitch") then
+				if S then
+					Hand = S.defaultHand
+					_G.HM:PerformCMAction("ShowHand", Hand)
+				end
+			end
+			if WeaponUtils:HasItemCapability(item, "Cartridge") then
+				self:setupCartridge()
+			end
+			if WeaponUtils:HasItemCapability(item, "FireMode") then
+				FiringSystem = FSys.new();
+				for i, v in ipairs(S.selectFireSettings.Modes) do
+					FiringSystem:addFireMode(v,v:upper())
+				end
+				self:HandleExtraFireModes()
+				if S.selectFireSettings.ignore then
+					for i, v in pairs(S.selectFireSettings.ignore) do
+						FiringSystem:addIgnoredMode(v)
+					end
+				end
+				FiringSystem:sort(S)
+				FiringSystem:showMode(S.burstSettings.Amount)
+				self:HandleFireModeAppearance()
+			end
+			if WeaponUtils:HasItemCapability(item, "ScopeADS") or  WeaponUtils:HasItemCapability(item, "ADS") then
+				CurrentItem.AimData.Entries = {};
+				for _, part in ipairs(CurrentItem.Value:GetChildren()) do
+					if part:IsA("BasePart") then
+						if part.Name == "AimPart" then
+							if part:FindFirstChild("AimOrder") then
+								CurrentItem.AimData.Entries[part.AimOrder.Value] = part
+							end
+						end
+					end
+				end	
+			end
+			if WeaponUtils:HasItemCapability(item, "ScopeADS") then
+				_G.HM:PerformCMAction("SetScopeProperty", "Time", S.aimSettings and S.aimSettings.Time or 0.3)
+			end
+			]]--
+			WeaponUtils:RunHook(item, "PreLoad", self, {
+				tween = tween;
+				getAlpha = getAlpha;
+				ViewModel = ViewModel;
+				Character = Character;
+				S = S;
+			})
+		end,
+		Equip = function(self)
+			--table.clear(Lasers)
+			if not item then
+				return
+			end
+			if WeaponUtils:HasItemCapability(item, "Recoil") then
+				--self:CalculateRecoil()
+			end
+			if WeaponUtils:HasItemCapability(item, "Lasers") then
+				Lasers = {};
+				runAsync(function()
+					for _, p in ipairs(item:GetChildren()) do
+						if p:IsA("BasePart") then
+							if p.Name == ("Laser") then
+								if p:FindFirstChild("AimOrder") then
+									Lasers[p.AimOrder.Value] = p;
+								end
+							end
+						end
+					end
+				end)
+			end
+			if item:FindFirstChild("Barrel") then
+				barrelColor = item.Barrel.Color
+				if S.barrelOverheat then
+					item.Barrel.Color = Lerps.Color3(barrelColor,BrickColor.new("Bright red").Color,item:GetAttribute("Heat") or 0)
+				end
+			end
+			fireRate = S.roundsPerMin
+			if not item:FindFirstChild("Magazine")  then
+				if item:FindFirstChild("Rounds") then
+					if (((#item.Rounds:GetChildren() <= 0) and (item:GetAttribute("AmmoInd") or item:GetAttribute("Ammo")) > 0)) or S.reloadSettings.has2Methods then
+						if Animations["Equip"]   then
+							self:PlayAnimation("Equip",true)
+						end
+					end
+				elseif Animations["Equip"] and WeaponUtils:HasEnoughMags(player, item)  then
+					self:PlayAnimation("Equip",true)
+				end
+			elseif  S.forceEquip then 
+				if Animations["Equip"] then
+					self:PlayAnimation("Equip",true)
+				end
+			end
+			if Animations["AttachmentEquip"] then
+				self:PlayAnimation("AttachmentEquip",true)
+			end
+			if Animations["StorageEquip"] then
+				self:PlayAnimation("StorageEquip",true)
+			end	
+			--[[if InputComp.CurrentIScheme ~= "Gunner" and WeaponUtils:HasItemCapability(item, "ScopeADS")	then
+				self:InitSight() 
+			end]]--
+
+			self:SignalEquipped()
+
+		end;
+	},{
+		__index = function(self, k)
+			local key = k:lower()
+			if key == "settings" then
+				return S
+			elseif key == "value" then
+				return item 
+			elseif key == "stocktype" then
+				return stockType 
+			end
+		end,
+		__newindex = function(self, k, v)
+			local key = k:lower()
+			if key == "value" then
+				item = v 
+				if item then
+					--if item.Type.Value == "Gun" or item.Type.Value == "Launcher" then
+						--AimPart.Current = 1;
+						--AimPart.Entries = {}
+						--G.gunRecoilSpring.f = 8
+						--AimChanged:Fire(Aimed)
+					--end
+				else
+					--AimPart.Current = 1;
+					--Aimed = false;
+					--AimChanged:Fire(Aimed)
+					--table.clear(Main);
+					--Main = {};
+					--currentMainIndex = 1;
+					--currentLaserIndex = 0;
+					newMag = false
+					--scopeSetting = nil;
+				end
+			elseif key == "settings" then
+				S = v
+			end
+		end,
+	})
 end
 -----
 CameraService:startClient()
@@ -668,77 +930,137 @@ do
 end
 
 -------
-player.CharacterAdded:Connect(function(ch)
-    Character = ch
-	Humanoid = Character:WaitForChild("Humanoid", 20)
-	CharacterParts.Torso = Character:WaitForChild("Torso",200)
-    CharacterParts.Head = ch:WaitForChild("Head", 20)
-	CharacterParts.HRP = Character.PrimaryPart
-	CharacterJoints.Root = CharacterParts.HRP:WaitForChild("RootJoint",200)
-	CharacterJoints.Neck = CharacterParts.Torso:WaitForChild("Neck",200)
-	CharacterJoints.Hips.Left = CharacterParts.Torso:WaitForChild("Left Hip",200)
-	CharacterJoints.Hips.Right = CharacterParts.Torso:WaitForChild("Right Hip",200)
-	CharacterJoints.Shoulders.Left = CharacterParts.Torso:WaitForChild("Left Shoulder",200)
-	CharacterJoints.Shoulders.Right = CharacterParts.Torso:WaitForChild("Right Shoulder",200)
-	player.CameraMode = Enum.CameraMode.LockFirstPerson
-	InputComp.ToggleMouseControl(false, InputComp.Platform ~= "Touch")
-    CharacterParts.ASM = Resources:LoadLibrary("AnimateHelper")(Character)
-	Humanoid:SetStateEnabled(Enum.HumanoidStateType.Swimming,false)
-    CameraService:setCamMode("FirstPerson", CharacterParts.Head)
-	ViewModel.Shadow = PseudoInstance.new("CharacterShadow",Character,player,{ViewModel.gunIgnore});
-	ViewModel.Shadow:InitShadow()
-    startRenders()
-	table.insert(Connections,Humanoid.StateChanged:Connect(function(old,new)
-		InputComp.CharacterController.State = (new)
-	end))
-	table.insert(Connections, Humanoid.Died:Connect(function()
-		RemoteService.send("Server","ResetViewModel",{
-			gunIgnore = ViewModel.gunIgnore;
-			Shoulders = CharacterJoints.Shoulders;
-			LArm = CharacterParts.LArm;
-			RArm = CharacterParts.RArm;
-			LWeld = ViewModel.LWeld;
-			RWeld = ViewModel.RWeld;
-			Grips = ViewModel.Grips;
-		})
-	end))
-	InputComp.CharacterController:Enable(true)
-end)
-player.DescendantRemoving:Connect(function(c)
-	if c == Character then
-		if (not c.Parent) then --or c.Parent == workspace.CorpseIgnore then
-
-			for i, conn in Connections do
-				if typeof(conn) == "RBXScriptConnection" then
-					conn:Disconnect()
-					Connections[i] = nil
+do
+	local tween = Resources:GetComponent("Tweener")
+	player.CharacterAdded:Connect(function(ch)
+		Character = ch
+		Humanoid = Character:WaitForChild("Humanoid", 20)
+		CharacterParts.Torso = Character:WaitForChild("Torso",200)
+		CharacterParts.Head = ch:WaitForChild("Head", 20)
+		CharacterParts.HRP = Character.PrimaryPart
+		CharacterJoints.Root = CharacterParts.HRP:WaitForChild("RootJoint",200)
+		CharacterJoints.Neck = CharacterParts.Torso:WaitForChild("Neck",200)
+		CharacterJoints.Hips.Left = CharacterParts.Torso:WaitForChild("Left Hip",200)
+		CharacterJoints.Hips.Right = CharacterParts.Torso:WaitForChild("Right Hip",200)
+		CharacterJoints.Shoulders.Left = CharacterParts.Torso:WaitForChild("Left Shoulder",200)
+		CharacterJoints.Shoulders.Right = CharacterParts.Torso:WaitForChild("Right Shoulder",200)
+		player.CameraMode = Enum.CameraMode.LockFirstPerson
+		InputComp.ToggleMouseControl(false, InputComp.Platform ~= "Touch")
+		CharacterParts.ASM = Resources:LoadLibrary("AnimateHelper")(Character)
+		Humanoid:SetStateEnabled(Enum.HumanoidStateType.Swimming,false)
+		CameraService:setCamMode("FirstPerson", CharacterParts.Head)
+		ViewModel.Shadow = PseudoInstance.new("CharacterShadow",Character,player,{ViewModel.gunIgnore});
+		ViewModel.Shadow:InitShadow()
+		table.insert(Connections,Character.ChildAdded:Connect(function(item)
+			if item:IsA("Model") then
+				if item:FindFirstChild("Type") then
+					ItemEquipped:Fire(item)
 				end
 			end
+		end))
+		table.insert(Connections, ItemEquipped:Connect(function(item)
+			local itemReady = false
+			if item then
+				if item:FindFirstChild("Type") then
+					CurrentItem.Type = item.Type.Value
 
-			--removeElement(Ignore,Character);
+					if CurrentItem.Type  ~= "Binoculars" then
+						CameraService.setFOV(if Components.Settings then Components.Settings:GetGlobal("fov") else 70)
+					else
+						CameraService.setFOV(80)
+					end
+					local scheme = WeaponUtils:GetInputScheme(item)
+					if scheme then
+						if UIS.TouchEnabled then
+							InputComp.HideScheme(InputComp.CurrentIScheme)
+						end
+						InputComp.CurrentIScheme = (#tostring(scheme) > 0) and scheme or nil 
 
-
-			for _, pluginObj in ClientPlugins do
-				if pluginObj.OnCharacterRemoving then
-					pluginObj.OnCharacterRemoving({
-						CharacterJanitor = Jan_Char;
-						RS = RunService;
-						ViewModel = ViewModel;
-						taskSpawn = runAsync;
-						CharState = CharState;
-						RemoteService = RemoteService;
-						DepthOfField = game.Lighting.ItemDepth;
-						ClientSettings = ClientSettings;
-					}, Components)
+						itemReady = (InputComp.CurrentIScheme ~= nil)
+					end
+					--if item then
+					--_G.HM.Context = item;
+					--else
+					--_G.HM.Context = nil;
+					--end
 				end
-				
 			end
+			if itemReady then
+				CurrentItem.Value = item;
+				CurrentItem.Settings = require(item.SETTINGS)
+				CurrentItem:LoadAnim(CurrentItem.Value)
+				local basePos = WeaponUtils:GetBasePose(CurrentItem.Value)
+				local equipSettings = CurrentItem.Settings.equipSettings
+				if WeaponUtils:HasItemCapability(CurrentItem.Value,"Cartridge") then
+					if (not Resources:GetFlagValue("LookReady")) and player:GetAttribute("ArmoredUnit") then
+						repeat
+							task.wait()
+						until
+						_G.GunReady
+					end
+				end
+				CurrentItem:PrepareItem()
+				task.spawn(function()
+					tween("Joint",ViewModel.LWeld, false, CurrentItem:getArmPos(basePos,"Left"), getAlpha("Standard"), if equipSettings then equipSettings.Time else 0.3)
+					tween("Joint",ViewModel.RWeld, false, CurrentItem:getArmPos(basePos,"Right"), getAlpha("Standard"), if equipSettings then equipSettings.Time else 0.3)
+					tween("Joint",ViewModel.Grips.Right, false, CurrentItem:getArmPos(basePos,"Grip"), getAlpha("Standard"), if equipSettings then equipSettings.Time else 0.3)
+					CurrentItem:Equip()
+				end)	
+			end
+		end))
+		startRenders()
+		table.insert(Connections,Humanoid.StateChanged:Connect(function(old,new)
+			InputComp.CharacterController.State = (new)
+		end))
+		table.insert(Connections, Humanoid.Died:Connect(function()
+			RemoteService.send("Server","ResetViewModel",{
+				gunIgnore = ViewModel.gunIgnore;
+				Shoulders = CharacterJoints.Shoulders;
+				LArm = CharacterParts.LArm;
+				RArm = CharacterParts.RArm;
+				LWeld = ViewModel.LWeld;
+				RWeld = ViewModel.RWeld;
+				Grips = ViewModel.Grips;
+			})
+		end))
+		InputComp.CharacterController:Enable(true)
+	end)
+	player.DescendantRemoving:Connect(function(c)
+		if c == Character then
+			if (not c.Parent) then --or c.Parent == workspace.CorpseIgnore then
 
-			table.clear(Connections)
-			InputComp.CharacterController:Enable(false)
+				for i, conn in Connections do
+					if typeof(conn) == "RBXScriptConnection" then
+						conn:Disconnect()
+						Connections[i] = nil
+					end
+				end
+
+				--removeElement(Ignore,Character);
+
+
+				for _, pluginObj in ClientPlugins do
+					if pluginObj.OnCharacterRemoving then
+						pluginObj.OnCharacterRemoving({
+							CharacterJanitor = Jan_Char;
+							RS = RunService;
+							ViewModel = ViewModel;
+							taskSpawn = runAsync;
+							CharState = CharState;
+							RemoteService = RemoteService;
+							DepthOfField = game.Lighting.ItemDepth;
+							ClientSettings = ClientSettings;
+						}, Components)
+					end
+
+				end
+
+				table.clear(Connections)
+				InputComp.CharacterController:Enable(false)
+			end
 		end
-	end
-end)
+	end)
+end
 ----- Keybinds ------
 local Jan = Janitor.new()
 local function UpdateGeneralKeys()
