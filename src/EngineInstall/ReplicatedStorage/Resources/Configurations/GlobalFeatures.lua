@@ -13,4 +13,8 @@ return {
     Furnitures = false;
     -- Footprints for everone
     Footprints = true;
+    -- Collisions (toggleable)
+    Collisions = false;
+    -- Stocks for everyone
+    Stocks = false;
 }

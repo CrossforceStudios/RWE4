@@ -36,6 +36,11 @@ local CF = {
 		end
 	end
 end
+-- Animation constants
+local armC0 = {
+	CF.RAW(-1.5, 0, 0) * CF.ANG(RAD(90), 0, 0);
+	CF.RAW(1.5, 0, 0) * CF.ANG(RAD(90), 0, 0);
+}
 -- ClientPlugins Loading
 local ClientPlugins = {} do
 	for i, pl: ModuleScript in script.Plugins:GetDescendants() do
@@ -78,6 +83,11 @@ local FastWait = Resources:LoadLibrary("FastWait")
 local isIgnored = Resources:LoadLibrary("isIgnored")
 local WeaponUtils = Resources:LoadLibrary("WeaponUtils")
 local Signal = Resources:LoadLibrary("Signal")
+local EasingFunction = Resources:LoadLibrary("EasingFunctions")
+
+-- Necessary configs
+local Magazines = Resources:LoadConfiguration("Magazine")
+local PostAnimHooks = Resources:LoadConfiguration("PostAnimHooks")
 
 -- Shortcuts
 local VEC2 = Vector2.new
@@ -90,7 +100,7 @@ _G.gunRecoilSpring = Spring.new(0.45,15,V3())
 
 ----
 local UP_RATE = 0.05
-
+local itemTransChange, BoltWelds
 -- Important Client Parts
 local ClientSettings = require(script.Parent:WaitForChild("ClientSettings", 20))
 local ItemEquipped = Signal.new()
@@ -131,6 +141,7 @@ local  cRecoilAnim = {
 }	
 
 do 
+	local bWS = 14;
 	local swaySpring = Spring.new(1, 4, V3())
 	local stances = {} do
 		for k, stance in ClientSettings.Stances do
@@ -305,7 +316,7 @@ do
 		end
 		if CurrentItem.Value then
 			local basePos = WeaponUtils:GetBasePose(CurrentItem.Value)
-			if (not CurrentItem.Aimed) and (not colTweenDB) and (not Humanoid.Sit) and features("getFeature", "Collisions") then
+			if (not CurrentItem.Aimed) and (not colTweenDB) and (not Humanoid.Sit) and Resources:FindGlobalFeature("Collisions") then
 				colTweenDB = true
 				local res, hit, lerp = MH:GetCollisionData(player)
 				if res and hit.CanCollide and (not CurrentItem:IsPlayingAnim()) and (CharState.currentState:lower() ~= "running") and Humanoid.MoveDirection.Magnitude <= 0 then
@@ -406,6 +417,9 @@ do
 	})
 end
 -----
+local function currentGripArm()
+	return ViewModel.Grips.Current == "Left" and CharacterParts.LArm or CharacterParts.RArm
+end
 do
 	local item = nil;
 	local S = nil;
@@ -413,7 +427,34 @@ do
 	local Animations = {};
 	local Lasers = {}; 
 	local stockType = nil;
-	local AttachmentMods = Resources:LoadConfiguration("AttachmentModules")	
+	local sightIndex = 0;
+	local magTable = {};
+	local ammoInClip = 0;
+	local Type = nil;
+	local poses = {};
+	local AttachmentMods = Resources:LoadConfiguration("AttachmentModules")
+	local animCancel = PseudoInstance.new("AnimPlaybackController",ClientSettings.Anims.CancelCache,ClientSettings.Anims.NonCancellable)
+	local function getAnimAPI()
+		return ClientSettings.AnimAPI({
+			FastSpawn = task.spawn;
+			armC0 = armC0;
+			Camera = CameraService.Cam;
+			Player = player;
+			ItemAPI = CurrentItem;
+			sightIndex = sightIndex;
+			CharacterParts = CharacterParts;
+			--FiringSystem = FiringSystem;
+			WeaponUtils = WeaponUtils;
+			poses = poses;
+			ViewModel = ViewModel;
+			CharacterJoints = CharacterJoints;
+			newMag = newMag;
+			AttributeUtils = AttributeUtils;
+			ammoInClip = function()
+				return ammoInClip
+			end,
+		})
+	end		
 	CurrentItem = setmetatable({
 		IsPlayingAnim = function(self)
 			return false
@@ -501,6 +542,285 @@ do
 
 			end
 		end;
+		playSound = function(self,id, volume, pitch, rom)
+			pcall(function()
+				if not self.Value then return end
+				local Sound = self.Value.HoldPart:FindFirstChild("MainSound")
+				if S.animSounds then
+					if S.animSounds[id] then
+						RemoteService.sendU("Server","PlayItemSoundServer", self.Value, id, volume, pitch, rom)
+						return
+					end
+				end
+				Sound.SoundId = id
+				if volume then
+					Sound.Volume = volume
+				end
+				if pitch then
+					Sound.PlaybackSpeed = pitch
+				end
+				if rom then
+					Sound.RollOffMode = rom
+				end
+				Sound:Play()
+				local soundConn
+				soundConn = Sound.Ended:connect(function()
+					Sound.SoundId = ""
+					Sound.Volume = 1 
+					Sound.Pitch = 1
+					Sound.PlaybackSpeed = 1
+					Sound.RollOffMode = Enum.RollOffMode.Inverse
+					soundConn:disconnect()
+					Sound:ClearAllChildren()
+					soundConn = nil;
+				end)		
+			end)		
+		end;
+		PlayAnimation = function(self,animName,carry,...)
+			local tween = Resources:GetComponent("Tweener")
+			if (not self.Value) and (not currentVehicle) then return end
+			if animCancel.CurrentAnim then return end
+			if Aiming then return end
+			
+			local args = {...}
+			local s, err = pcall(function()
+				local cancelled, cancelConn = false, nil
+				local item2 = item
+				if item then ammoInClip = item:GetAttribute("Ammo") end
+				tween("Joint",ViewModel.LWeld2, CF.RAW(), CF.RAW(), getAlpha("OutSine"), 0.15)
+				tween("Joint",ViewModel.RWeld2, CF.RAW(), CF.RAW(), getAlpha("OutSine"), 0.15)
+				local selfObj = self
+				local clipTable  = {};
+				local attTable = {};
+				local roundsCache = {};
+				local api = {
+					getAlpha = function(animApi,alphaToken)
+						return getAlpha(alphaToken)
+					end;
+					shakeCamera = function(animApi, effectName, ...)
+						CameraService:ShakeBump(effectName, ...)
+					end;
+					tweenJoint = function(animApi,Joint,newC0,newC1,Alpha,Duration,isBlade,action)
+						tween("Joint",Joint,newC0,newC1,Alpha,Duration,isBlade,false,action)
+					end;
+					createMag = function(animApi,Key,useOldMag,magType2)
+						local magRevolverCase = nil;
+						local magModel = useOldMag and item:FindFirstChild("Magazine") or nil
+						if not magModel then
+							magModel = WeaponUtils:PerformAsyncServerAction(player, item, "CreateMagazine", magType2 or item:GetAttribute("MagType"))
+						end
+						for _, v in magModel:GetDescendants() do
+							if v:IsA("BasePart") then
+								v.LocalTransparencyModifier = 0
+							end
+						end
+						magTable[Key] = magModel
+						return magModel
+					end;
+					attachGripToArm = function(animApi,armType)
+						local basePos = WeaponUtils:GetBasePose(CurrentItem.Value)
+						local lcf = CharacterParts.LArm.CFrame:toObjectSpace(item.HoldPart.CFrame)	
+						if armType == "Left" then
+							ViewModel.Grips.Right.C1  = selfObj:getArmPos(basePos,"Grip")	
+							ViewModel.Grips.Right.Part1 = nil
+							ViewModel.Grips.Left.C0 = lcf						
+							ViewModel.Grips.Left.Part1 = item.HoldPart
+							ViewModel.Grips.Left.C1 = CF.RAW()				
+						else
+							ViewModel.Grips.Left.Part1 = nil
+							ViewModel.Grips.Right.C1 = selfObj:getArmPos(basePos,"Grip")														
+							ViewModel.Grips.Right.Part1 = item.HoldPart
+						end		
+						RemoteService.sendU("Server","AttachGrip",armType,item,selfObj:getArmPos(basePos,"Grip"),lcf)
+						ViewModel.Grips.Current = armType
+					end;
+					tweenRecoil = function(animApi,Pos, Rot, Alpha, Duration)
+						tween("Recoil" , Pos, Rot, Alpha, Duration)
+					end;
+					playSound = function(animApi,...)
+						selfObj:playSound(...)
+					end;
+					getMag = function(animApi,Key)
+						if magTable[Key] then
+							return magTable[Key]
+						else
+							return nil
+						end
+					end;
+					tweenBolt = function(animApi,Key, Kick, Rot, Alpha, Duration)
+						tween("Bolt", Key, Kick, Rot, Alpha, Duration)
+					end;
+					attachMag = function(animApi,magName,clientOnly)
+						local mag = magTable[magName]
+						if mag then
+							do
+								local mag2 = Magazines[mag.Name]
+								if mag2 then
+									local spring = mag2:GetSpringType(S.reloadSettings.springProfile)
+									if spring then
+										magSpr = spring
+									end
+								end
+							end
+							if clientOnly then
+								item:FindFirstChild("MagazineAttachment",true).Part1 = mag.Point
+							else
+								WeaponUtils:PerformAsyncServerAction(player, item, "AttachMag", mag)							
+							end
+
+
+
+							if mag:FindFirstChild("Moving") then
+								selfObj:ToggleBolt(true,(mag:FindFirstChild("Moving") and 1 or 0))
+							end
+						end
+					end;
+					getInsertionCFrame = function(animApi,mode,LC1,RC1,GC1,magPoint,offset,...)
+						local mPoint 
+						if not S.reloadSettings.has2Methods then
+							mPoint = item:FindFirstChild("MagPoint")
+						else
+							mPoint = item:FindFirstChild("MagPointB")
+						end
+						local ArmBase = ViewModel.armBase
+						local LArmCF, RArmCF, handleOffsetCF, originalMagOffsetCF = CF.RAW(),CF.RAW(),CF.RAW(),CF.RAW()
+						local newMagCF = CF.RAW()
+						if LC1 then
+							LArmCF = ArmBase.CFrame *ViewModel.LWeld.C0 *(LC1):inverse()
+						end
+						if RC1 then
+							RArmCF = ArmBase.CFrame * ViewModel.RWeld.C0 * (RC1):inverse()
+						end
+						if GC1 then
+							local gripArm = currentGripArm()
+							handleOffsetCF = gripArm.CFrame:toObjectSpace(gripArm.CFrame * ViewModel.Grips[ViewModel.Grips.Current].C0 *(GC1):inverse())
+						end
+						if mode == "Attachment" then
+							local node = magPoint
+							local nodePart = item:FindFirstChild(node.."Node")
+							if not nodePart then
+								return nil
+							end
+							originalMagOffsetCF = item:FindFirstChild((item:FindFirstChild("Lid") and node == "Optics") and "Lid" or "HoldPart").CFrame:toObjectSpace(nodePart.CFrame)
+						elseif mode == "UnderbarrelGrenade" then
+							originalMagOffsetCF = item.HoldPart.CFrame:toObjectSpace(item.NadeIPoint.CFrame)	
+						elseif mode == "MagPoint" then
+							originalMagOffsetCF = item.HoldPart.CFrame:toObjectSpace(item.MagPoint:GetPrimaryPartCFrame())
+						elseif mode == "Round" or mode == "Shell" then
+							originalMagOffsetCF = item.HoldPart.CFrame:toObjectSpace(magPoint.CFrame)
+						elseif mode == "Clip" then
+							originalMagOffsetCF = item.HoldPart.CFrame:toObjectSpace(mPoint:GetPrimaryPartCFrame())
+						else
+							originalMagOffsetCF = item.HoldPart.CFrame:toObjectSpace(item.MagPoint.CFrame)
+						end
+						local gArm = currentGripArm()
+						if gArm == CharacterParts.RArm then
+							newMagCF = LArmCF:toObjectSpace(RArmCF * handleOffsetCF * originalMagOffsetCF)
+						elseif gArm == CharacterParts.LArm then
+							newMagCF = RArmCF:toObjectSpace(LArmCF * handleOffsetCF * originalMagOffsetCF)				
+						end
+						if offset then
+							newMagCF = newMagCF * offset
+						end
+						return newMagCF
+					end;
+				}
+				api = setmetatable(api, {
+					__index = function(animApi,k)
+						local AnimAPI_DEF = getAnimAPI()
+						if AnimAPI_DEF.Functions[k] then
+							return AnimAPI_DEF.Functions[k]
+
+						elseif AnimAPI_DEF.Constants[k] then
+							return AnimAPI_DEF.Constants[k]					
+
+						elseif AnimAPI_DEF.Variables[k] then
+							return AnimAPI_DEF.Variables[k](animName,args,animApi)
+
+						elseif AnimAPI_DEF.TimeVariables[k] then
+							return AnimAPI_DEF.TimeVariables[k]()	
+						elseif k == "cancelled" then
+							return cancelled
+						end
+					end;
+					__newindex = function(animApi,k,v)
+						if k == "newMag" then
+							newMag = (typeof(v) == "boolean" and v ) and v or true
+						elseif k == "cancelled" then
+							cancelled =  (typeof(v) == "boolean" and v ) and v or true
+						else
+							warn("Invalid property or readonly")
+						end
+					end
+				})
+				local sequenceTable = Animations[animName]
+				if sequenceTable then
+					sequenceTable = sequenceTable(api)
+				end
+				--local T = TICK()
+				animCancel.CurrentAnim = animName
+				cancelConn = animCancel.AnimCancelled:Connect(function(anim)
+					if anim == animName then
+						cancelled = true;
+						print("Cancelled")
+						cancelConn:Disconnect()
+						--[[for i, v in ipairs(self.magTable) do --In case the reload animations was stopped mid way and there were still fake mags that weren't deleted
+							if v then
+								if item ~= item2 or v.Name ~= "Magazine" then
+									magTable[i]:Destroy()
+								end
+								magTable[i] = nil;
+							end					
+						end
+						for _, v in ipairs(self.grenadeTable) do
+							v:Destroy()
+						end
+						]]--
+					end
+				end)
+				if sequenceTable then
+					for i, animFunction in ipairs(sequenceTable) do
+						if cancelled then
+							break
+						end
+						if (not self.Value) and (not currentVehicle) then
+							break
+						end
+
+						local t0 = tick()
+						animFunction()
+					end
+				end
+				cancelConn:Disconnect()
+				cancelConn = nil;
+				if animName ~= "Reload" then
+					animCancel:Reset(animName)
+				end
+				if carry then
+					if not animName:find("Climbing") then
+						if (CharState.currentState ~= "Crawling") and (CharState.currentState ~= "Diving") then
+							if PostAnimHooks[Type] then
+								PostAnimHooks[Type](CharState,CurrentItem,ViewModel,tween,getAlpha,S,armC0)
+							end
+						end
+					end
+					task.delay(0.4,function()	
+						--if Type == "Melee" then api:endBlade() end
+						if ViewModel.Grips.Current == "Left" then
+							api:attachGripToArm("Right")
+						end
+					end)
+					if CurrentItem.Type == "Gun" or CurrentItem.Type == "Launcher" then
+						--[[if self.FiringSystem.CurrentMode.Name:upper()  ~= "BAYONET" then
+							tween("Recoil",V3(),V3(), getAlpha("OutSine"),0.4)
+						end]]--
+					end
+				end
+			end)
+			if err then
+				print(err)
+			end
+		end;
 		PrepareItem = function(self)
 			--[[
 			if WeaponUtils:HasItemCapability(item, "Healer") then
@@ -571,7 +891,7 @@ do
 			end
 			if WeaponUtils:HasItemCapability(item, "Lasers") then
 				Lasers = {};
-				runAsync(function()
+				task.spawn(function()
 					for _, p in ipairs(item:GetChildren()) do
 						if p:IsA("BasePart") then
 							if p.Name == ("Laser") then
@@ -611,6 +931,7 @@ do
 			if Animations["StorageEquip"] then
 				self:PlayAnimation("StorageEquip",true)
 			end	
+			
 			--[[if InputComp.CurrentIScheme ~= "Gunner" and WeaponUtils:HasItemCapability(item, "ScopeADS")	then
 				self:InitSight() 
 			end]]--
@@ -627,6 +948,8 @@ do
 				return item 
 			elseif key == "stocktype" then
 				return stockType 
+			elseif key == "type" then
+				return Type 
 			end
 		end,
 		__newindex = function(self, k, v)
@@ -653,12 +976,15 @@ do
 				end
 			elseif key == "settings" then
 				S = v
+			elseif key == "type" then 
+				Type = v
 			end
 		end,
 	})
 end
 -----
 CameraService:startClient()
+RemoteService.startClient()
 local soundUpdate do
 	local SoundBox2 = PseudoInstance.new("SoundBox",script.Parent.Footsteps,script.Parent.DeathSounds,script.Parent.JumpSounds)
 	SoundBox2:Setup()
@@ -923,12 +1249,141 @@ do
 			RemoteService.sendU("Server","SignalTween",Joint,newC0 or false,newC1 or false,getAlphaName(Alpha),Duration)	
 		end
 	end)
+	tween:addTweenFunction("Bolt", function(key,newKick,newRot,Alpha,Duration)
+		if typeof(Alpha) == "string" then 
+			Alpha = getAlpha(Alpha)
+		end
+		local bCf = CFrame.new(newKick) * CFrame.Angles(math.rad(newRot.Y),math.rad(newRot.X),math.rad(newRot.Z))
+		if Duration > (60/2000) then
+			tween("Joint",BoltWelds[key],false,bCf,Alpha,Duration)
+		else
+			tween("Joint",BoltWelds[key],false,bCf,Alpha,0)
+		end
+	end)
+	tween:addTweenFunction("Recoil", function(newPos,newRot,Alpha,Duration)
+		task.spawn(function()
+			if typeof(Alpha) == "string" then 
+				Alpha = getAlpha(Alpha)
+			end
+			local newCode = RNG:NextInteger(-1e9, 1e9)
+			recoilAnim.Code = newCode
+			local frames = 90
+			local Increment = (frames / 60) / Duration
+			local prevPos = recoilAnim.Pos
+			local prevRot = recoilAnim.Rot
+			local X = 0
+			local t0 = tick()
+			Alpha = EasingFunction[Alpha]
+			while true do
+				local dt = RunService.Heartbeat:Wait()
+				X = X + (Increment)
+				if recoilAnim.Code ~= newCode then break end
+				if (not CurrentItem.Value) then break end
+				recoilAnim.Pos =  prevPos:lerp(newPos, Alpha((X/frames) * Duration,0,1,Duration))
+				recoilAnim.Rot = prevRot:lerp(newRot,  Alpha((X/frames) * Duration,0,1,Duration))
+				if X >= frames  then break end
+			end
+
+			if recoilAnim.Code == newCode then
+				recoilAnim.Code = nil
+			end
+		end)
+	end)
 	RemoteService.listenU("Client","Bounce","TweenJoint",function(joint,newC0,newC1,alphaName,duration)
 		local alpha = getAlpha(alphaName)
 		tween("Joint",joint,newC0,newC1,alpha,duration,false,true)
 	end)
 end
+-------
+RemoteService.listenU("Client","Bounce","PlayItemSound",function(item,id,volume,pitch)
+	if not item then
+		return
+	end
+	if not item:FindFirstChild("HoldPart") then
+		return
+	end
+	local S = require(item.SETTINGS)
+	if not S.animSounds then
+		return
+	end
+	if not S.animSounds[id] then
+		return
+	end
+	local oldPitch = 1
+	local oldVolume = 0.75
+	local mainSound: Sound? = item.HoldPart:FindFirstChild("MainSound")
+	if mainSound then
+		mainSound.SoundId = S.animSounds[id]
+		mainSound.Volume = volume or mainSound.Volume;
+		mainSound.PlaybackSpeed = pitch or mainSound.PlaybackSpeed;
+		local rmin, rmax = mainSound.RollOffMinDistance, mainSound.RollOffMaxDistance
+		if id == "SelectFire" then
+			-- Lesser Sounds
+			mainSound.RollOffMinDistance = item:GetExtentsSize().Magnitude * 2
+			mainSound.RollOffMaxDistance = mainSound.RollOffMinDistance * 1.5
+		end
+		mainSound:Play()
+		local conn
+		conn = mainSound.Ended:Connect(function()
+			if mainSound.SoundId ~= "" then
+				mainSound.SoundId =""
+				mainSound.Volume = oldVolume
+				mainSound.PlaybackSpeed = oldPitch
+				if id == "SelectFire" then
+					-- Lesser Sounds
+					mainSound.RollOffMinDistance = rmin
+					mainSound.RollOffMaxDistance = rmax
+				end
+			end
+			conn:Disconnect()
+			conn = nil
+		end)
+	end
 
+end)
+-------
+itemTransChange = function()
+	if Humanoid.Health > 0  then
+		changePlayerTrans("regular",Character,tostring(CameraService.CurrentCamMode):find("FirstPerson") and 1 or 0,{CurrentItem.Value})
+		if tostring(CameraService.CurrentCamMode):find("FirstPerson") and CurrentItem.Value then
+			local charIgnore = {}
+			table.insert(charIgnore,CurrentItem.Value or  lastItem)
+			if CurrentItem.Settings then
+				local hiddenArm = CurrentItem.Settings.sprintSettings
+				if hiddenArm then
+					hiddenArm = hiddenArm.hideArm
+				end
+				if typeof(hiddenArm) == "string" then
+					hiddenArm = hiddenArm:sub(1,1)
+					local ViewModelArm = ViewModel["fake"..hiddenArm.."Arm"]
+					if (ViewModelArm) then
+						local changeTrans = 0 
+						if CharState.currentState == "Running" then
+							if not CharState.RunTransition then
+								changeTrans = CurrentItem:IsPlayingAnim() and 0 or 1												
+							end
+						end
+						changePlayerTrans("partlist",ViewModelArm:GetConnectedParts(),changeTrans,{Character})
+					end
+				end
+
+			end
+
+		end			
+	end
+end
+RemoteService.listen("Client","Send","SetupBolts",function(bW,item)
+	if WeaponUtils:HasItemCapability(item, "UsesAction") then
+		BoltWelds = {}
+		for _, boltW in item.SlidePart:GetChildren() do
+			if boltW:IsA("Motor6D") then
+				if boltW:GetAttribute("Role") then
+					BoltWelds[boltW:GetAttribute("Role")] = boltW
+				end
+			end
+		end
+	end
+end)
 -------
 do
 	local tween = Resources:GetComponent("Tweener")
@@ -938,6 +1393,9 @@ do
 		CharacterParts.Torso = Character:WaitForChild("Torso",200)
 		CharacterParts.Head = ch:WaitForChild("Head", 20)
 		CharacterParts.HRP = Character.PrimaryPart
+		CharacterParts.LArm = ch:WaitForChild("Left Arm", 20)
+		CharacterParts.RArm = ch:WaitForChild("Right Arm", 20)
+
 		CharacterJoints.Root = CharacterParts.HRP:WaitForChild("RootJoint",200)
 		CharacterJoints.Neck = CharacterParts.Torso:WaitForChild("Neck",200)
 		CharacterJoints.Hips.Left = CharacterParts.Torso:WaitForChild("Left Hip",200)
@@ -988,6 +1446,7 @@ do
 			if itemReady then
 				CurrentItem.Value = item;
 				CurrentItem.Settings = require(item.SETTINGS)
+				itemTransChange()
 				CurrentItem:LoadAnim(CurrentItem.Value)
 				local basePos = WeaponUtils:GetBasePose(CurrentItem.Value)
 				local equipSettings = CurrentItem.Settings.equipSettings
@@ -1204,6 +1663,9 @@ do
 				PlayerScripts = script.Parent;
 				RunService = RunService;
 				RayUtils = RayUtils;
+				ViewModelGet = function()
+					return ViewModel
+				end,
 				changePlayerTrans = changePlayerTrans;
 			}, Components)
 		end

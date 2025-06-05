@@ -160,6 +160,7 @@ local ItemAssembler = PseudoInstance:Register("GunAssembler",{
 							end
 						end
 						self.BoltWelds[bRole] = Joint("Assemble",(cond and bolte or slidepart),bolt,CF(),"BoltWeld")
+						self.BoltWelds[bRole]:SetAttribute("Role", bRole)
 						bolt.Anchored = false
 					end
 				end

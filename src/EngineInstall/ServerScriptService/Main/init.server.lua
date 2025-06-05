@@ -361,11 +361,19 @@ RemoteService.listen("Server","Send","ResetViewModel",function(player,Vars)
 		end
 	end
 end)
+RemoteService.listenU("Server","Send","PlayItemSoundServer",function(player,item,id,volume,pitch)
+	RemoteService.bounceU("Client","PlayItemSound",item,id,volume,pitch)
+	for _, m in ipairs(_G.Mobs) do
+		if m then
+			m:Hear(player,cf.p)
+		end
+	end
+end)
 -----
 Players.PlayerAdded:Connect(function(plr)
 	EventSystem:FireEvent("PlayerAdded", plr)
 end)
-
+WeaponUtils:StartTypeProcessor()
 FactionService:startServer()
 for _, pair in ServerSettings.CollisionPairs do
 	if pair[1] == "Default" or pair[2] == "Default" then

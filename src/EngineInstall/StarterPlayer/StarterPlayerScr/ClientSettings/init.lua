@@ -85,6 +85,26 @@ local ClientSettings = {
 			math.sin(a * 3 / 4) / 35
 		)
 	end;
+	Anims = {
+		CancelCache = {
+			["Reload"] = false;
+			["Inspecting"] = false;
+			["Cocking"] = false;
+			["Parkour"] = false;
+			["Spot"] = false;
+			["Nading"] = false;
+			["Throwing"] = false;
+			["DropAmmo"] = false;
+			["Equip"] = false;
+			["AttachmentEquip"] = false;
+			["Surrender"] = false;
+			["SelectFire"] = false;
+
+		};
+		NonCancellable = {
+			"Cocking";
+		}
+	};
 	Events = {
 		"MapReady";
 	};

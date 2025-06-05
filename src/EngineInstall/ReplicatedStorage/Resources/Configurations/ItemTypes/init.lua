@@ -53,7 +53,7 @@ local itemTypes = {
 						local sCF			
 
 						local set = false;
-						if animTab.CurrentItemValue then
+						if animTab.CurrentItemValue and Resources:FindGlobalFeature("Stocks") then
 							if animTab.CurrentItemValue:FindFirstChild("Stock") then
 								if (not animTab.CurrentItemValue:FindFirstChild("StockHinge")) and (not animTab.CurrentItemValue:FindFirstChild("StockSlide")) then
 									animTab.resetSway()
