@@ -344,6 +344,28 @@ RemoteService.listen("Server","Send","SetAJointC1",function(player,Joint,JC1)
 	end)
 end)
 -----
+_G.SetupItemAPI = function()
+	WeaponUtils.ServerAPI = {
+		fillGrenadeCrate = fillGrenadeCrate;
+		RemoteService = RemoteService;
+		PlayerLoadouts = PlayerLoadouts;
+		Gauges = Gauges;
+		ReplicatedStorage = ReplicatedStorage;
+		FastWait = FastWait;
+		PseudoInstance = PseudoInstance;
+		AssemblerList  = AssemblerList;
+		getWeaponType = function(item)
+			return WeaponUtils:GetSubType(item)
+		end,
+		MagazinesList = MagazinesList;
+		MagazineAPI = Magazine;
+		MagazineLibraries = MagazineLibraries;
+		Cartridges = Cartridges;
+		changeGrenadeColor = function(nade, color)
+			WeaponUtils:ChangeGrenadeColor(nade, color)
+		end,
+	}
+end
 RemoteService.listen("Server","Send","ResetViewModel",function(player,Vars)
 	if Vars.gunIgnore then
 		Vars.gunIgnore:Destroy()
@@ -363,11 +385,11 @@ RemoteService.listen("Server","Send","ResetViewModel",function(player,Vars)
 end)
 RemoteService.listenU("Server","Send","PlayItemSoundServer",function(player,item,id,volume,pitch)
 	RemoteService.bounceU("Client","PlayItemSound",item,id,volume,pitch)
-	for _, m in ipairs(_G.Mobs) do
+	--[[for _, m in ipairs(_G.Mobs) do
 		if m then
 			m:Hear(player,cf.p)
 		end
-	end
+	end]]--
 end)
 -----
 Players.PlayerAdded:Connect(function(plr)

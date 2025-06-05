@@ -11,7 +11,6 @@ return function(CurrentItemState)
 	local ViewModel = CurrentItemState.ViewModel
 	local stockType = CurrentItemState.ItemAPI.stockType
 	local newMag = CurrentItemState.newMag
-	local AttributeUtils = CurrentItemState.AttributeUtils
 	local player = CurrentItemState.Player
 	return {
 		Functions = {
@@ -620,12 +619,6 @@ return function(CurrentItemState)
 					Loaded = S.reloadSettings and S.reloadSettings.Times.Loaded or nil;
 					Empty = S.reloadSettings and S.reloadSettings.Times.Empty or nil;
 				}
-				if timeReload.Loaded and timeReload.Empty then
-					timeReload.Loaded -= AttributeUtils.getReloadTimeDeficit(player)
-					timeReload.Loaded = math.clamp(timeReload.Loaded, 1, S.reloadSettings.Times.Loaded)
-					timeReload.Empty -= AttributeUtils.getReloadTimeDeficit(player)
-					timeReload.Empty = math.clamp(timeReload.Empty, 1, S.reloadSettings.Times.Empty)
-				end
 				return timeReload
 			end;
 			dropTime = function()
