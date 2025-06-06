@@ -152,6 +152,10 @@ do
 			end
 		end
 	end
+	local walkSpeedSpring = Spring.new(0.5,8,14)
+	local lastPos = V3()
+	local pDist = 0
+	local idleAng = 0
 	local function gunBob(animName, a, r, dt)
 		if not CurrentItem.Animations then
 			return CF.RAW()
@@ -165,19 +169,18 @@ do
 		return ClientSettings.IdleAnimation(a, dt)
 	end
 	local aimAngle, NVGOffset = 0, CF.RAW()
-	local walkSpeedSpring = Spring.new(0.5,8,14)
 	local disabledStances = {};
 	local Stance = 0;
 	local stanceSway = 1	
 	local stanceTrans = false
 	local currentState = "Idling";
-	local lastPos = V3()
-	local pDist = 0
 	local idleAng = 0
+	local aimHeadOffset = 0;
 	local crawlAlpha = 0
 	local idleAlpha = 1
 	local walkAlpha = 0
 	local runAlpha = 0
+	local walkAnim = "WalkRifle"
 	local aimAlpha = 0
 	local leanAnim = {
 		Pos = Spring.new(0.8,16,0);
@@ -191,7 +194,6 @@ do
 		Ang = 0;
 		Code = 0;
 	};
-	local lastPos = V3()
 	local MotionVector = VEC2(0,0)
 	CharState.getStanceIndex = function(self,stance)
 		return stances[stance]
@@ -351,7 +353,36 @@ do
 			end 
 		end
 	end;	
+	local walkAnimTypes = ClientSettings.WalkAnimTypes;
+	local runAnimTypes = ClientSettings.RunAnimTypes;
 
+	function CharState:chooseWalkAnim()
+		local ty = CurrentItem.Type
+		if ty then
+			if ty == "Gun" then
+				local gt = CurrentItem.Value:FindFirstChild("GunType") 
+				if gt then
+					walkAnim = if CharState.currentState == "Running" then runAnimTypes[gt.Value] or "WalkPistol" else walkAnimTypes[gt.Value] or "WalkRifle"
+				end
+			elseif walkAnimTypes[ty] then
+				walkAnim = if CharState.currentState == "Running" then runAnimTypes[ty] or "WalkPistol" else walkAnimTypes[ty] or "WalkRifle"
+			else
+				walkAnim = if CharState.currentState == "Running" then runAnimTypes["Role"] or "WalkPistol" else walkAnimTypes["Role"] or "WalkRifle"
+			end
+		end
+	end
+	ItemEquipped:Connect(function()
+		CharState:chooseWalkAnim()
+	end)
+	RunService.Heartbeat:Connect(function(dt)
+			if  Character and Character.Parent then
+				_G.gunRecoilSpring.g = recoilAnim.Rot;
+				_G.gunRecoilSpring:Update(dt)
+				walkSpeedSpring:Update(dt)
+				swaySpring:Update(dt)
+				leanAnim.Pos:Update(dt)
+			end	
+	end)
 	CharState = setmetatable(CharState, {
 		__index = function(self,k)
 			local key = k:lower()
@@ -391,11 +422,11 @@ do
 				Stance = v 
 			elseif key == "grounded" then
 				onGround = v
-			--[[elseif key == "currentstate" then
+			elseif key == "currentstate" then
 				currentState = v
 				if CurrentItem.Value then
 					CharState:chooseWalkAnim()
-				end]]--
+				end
 			elseif key == "lastpos" then
 				lastPos = v
 			elseif key == "pdist" then
@@ -482,9 +513,6 @@ do
 			local anims =  require(Item.ANIMATIONS);
 			local anims2 = require(Resources:GetCustomAnim("Global"))
 			local anims4
-			if _G.GameMode == "Campaign" then
-				anims4 = require(Resources:GetCustomAnim("CampaignAnims"))
-			end
 			for name, anim in pairs(anims) do
 				Animations[name] = anim
 			end
@@ -950,6 +978,8 @@ do
 				return stockType 
 			elseif key == "type" then
 				return Type 
+			elseif key == "animations"
+				return Animations
 			end
 		end,
 		__newindex = function(self, k, v)

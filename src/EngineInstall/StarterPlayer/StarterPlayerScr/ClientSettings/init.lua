@@ -105,6 +105,13 @@ local ClientSettings = {
 			"Cocking";
 		}
 	};
+	WalkAnimTypes = {
+		["Assault"] = "WalkRifle2";
+
+	};
+	RunAnimTypes = {
+		["Assault"] = "WalkRifle";
+	};
 	Events = {
 		"MapReady";
 	};
