@@ -18,4 +18,17 @@ return {
 		{"Wheel","NPC",false};
 
 	};
+	CharacterStats = {
+		MaxStamina = 100;
+		CurrentStamina = 100;
+		Sprinting = false;
+		walkPenalty = 0;
+		offsetSpeed = 0;
+		MaxOxygen = 1000;
+		Oxygen = 1000;
+		walkSpeedMult = 1;
+		Stance = "Stand";
+		PrevStance = "Stand";
+		Animation = "None";
+	};
 };

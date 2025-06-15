@@ -157,6 +157,7 @@ do
 	local lastPos = V3()
 	local pDist = 0
 	local idleAng = 0
+	local RunTransition = false
 	local function gunBob(animName, a, r, dt)
 		if not CurrentItem.Animations then
 			return CF.RAW()
@@ -254,7 +255,7 @@ do
 		elseif InputComp.Platform == "Keyboard" then
 			MotionVector = VEC2(math.clamp(pos.X, -18, 18),math.clamp(pos.Y, -18, 18))
 		end
-		
+
 		local animTab = {
 			CurrentItemValue = CurrentItem.Value;
 			CurrentItemS = CurrentItem.Settings;
@@ -385,13 +386,13 @@ do
 		CharState:chooseWalkAnim()
 	end)
 	RunService.Heartbeat:Connect(function(dt)
-			if  Character and Character.Parent then
-				_G.gunRecoilSpring.g = recoilAnim.Rot;
-				_G.gunRecoilSpring:Update(dt)
-				walkSpeedSpring:Update(dt)
-				swaySpring:Update(dt)
-				leanAnim.Pos:Update(dt)
-			end	
+		if  Character and Character.Parent then
+			_G.gunRecoilSpring.g = recoilAnim.Rot;
+			_G.gunRecoilSpring:Update(dt)
+			walkSpeedSpring:Update(dt)
+			swaySpring:Update(dt)
+			leanAnim.Pos:Update(dt)
+		end	
 	end)
 	CharState = setmetatable(CharState, {
 		__index = function(self,k)
@@ -418,6 +419,8 @@ do
 				return RunningTrans
 			elseif key == "runtransition" then
 				return RunTransition
+			elseif key == "walkspeed" then
+				return walkSpeedSpring.p
 			else
 				return nil;
 			end
@@ -638,7 +641,7 @@ do
 			if (not self.Value) and (not currentVehicle) then return end
 			if animCancel.CurrentAnim then return end
 			if Aiming then return end
-			
+
 			local args = {...}
 			local s, err = pcall(function()
 				local cancelled, cancelConn = false, nil
@@ -988,7 +991,7 @@ do
 			if Animations["StorageEquip"] then
 				self:PlayAnimation("StorageEquip",true)
 			end	
-			
+
 			--[[if InputComp.CurrentIScheme ~= "Gunner" and WeaponUtils:HasItemCapability(item, "ScopeADS")	then
 				self:InitSight() 
 			end]]--
@@ -1017,10 +1020,10 @@ do
 				item = v 
 				if item then
 					--if item.Type.Value == "Gun" or item.Type.Value == "Launcher" then
-						--AimPart.Current = 1;
-						--AimPart.Entries = {}
-						--G.gunRecoilSpring.f = 8
-						--AimChanged:Fire(Aimed)
+					--AimPart.Current = 1;
+					--AimPart.Entries = {}
+					--G.gunRecoilSpring.f = 8
+					--AimChanged:Fire(Aimed)
 					--end
 				else
 					--AimPart.Current = 1;
@@ -1065,9 +1068,9 @@ do
 		RunService:BindToRenderStep("UpdateCam",Enum.RenderPriority.Camera.Value,function(dt)
 			--if (not CharacterParts.HAgent) or (not CharacterParts.HAgent.Health) then return end
 			--if CharacterParts.HAgent.Health > 0 and (not CharacterParts.HAgent:GetStateProperty("Unconscious"))  then
-				for i, seqFunc in ipairs(sequences["Camera"]) do
-					seqFunc(dt)
-				end
+			for i, seqFunc in ipairs(sequences["Camera"]) do
+				seqFunc(dt)
+			end
 			--end
 		end)
 	end
@@ -1080,6 +1083,14 @@ do
 	RenderEngine:AddCameraRender(function(dt)
 		local camOff = Vector2.new(0,0)
 		CameraService.CurrentCamMode.cameraPerspective = _G.CameraAng + camOff
+		local mm
+		if CharState.currentState == "Crawling" and (not CharacterParts.HRP.Anchored) then
+			mm = "Crawl";
+		elseif CharState.currentState == "Climbing" and (not CharacterParts.HRP.Anchored) then
+			mm = "Climb";
+		elseif CharState.currentState == "Swimming" and (not CharacterParts.HRP.Anchored) then
+			mm = "Swim";
+		end
 		InputComp.CharacterController:UpdateMovement(Character,InputComp.CharacterController.IState,mm)		
 		InputComp.CharacterController:Update(dt,function(jump)
 			Humanoid.Jump = jump --and Character:GetAttribute("CurrentStamina") >= threshold
@@ -1123,7 +1134,7 @@ function startRenders()
 			task.wait(UP_RATE)
 		end
 	end)
-    RenderEngine:AddGeneralRender(function(dt)
+	RenderEngine:AddGeneralRender(function(dt)
 		soundUpdate(dt)					
 	end)
 	RenderEngine:AddGeneralRender(function(dt)
@@ -1133,7 +1144,7 @@ function startRenders()
 			ViewModel.Shadow:Update(Humanoid.Sit)	
 		end	
 	end)
-	
+
 	RenderEngine:Start()
 end
 RemoteService.listen("Client","Send","SetPartsClient",function(dict)
@@ -1561,27 +1572,27 @@ do
 				end
 				CharState.leanAnim.Change = (CharState.leanAnim.Rot ~= oldLean)
 				]]--
-				if key == InputComp:GetBindCode("Core","Sprint") or ClientSettings.DefaultKeys.Sprint  then
-					if Character then
-						if Humanoid then
-							if  Humanoid.Health > 0 then
-								if  Humanoid.Sit then return end
-								if not CameraService.CutsceneSysBusy then
-									if not CurrentItem:IsPlayingAnim()  then
-										if CurrentItem.Value then
-											if not CurrentItem:IsPlayingAnim() then
-												if CurrentItem.Aimed then CurrentItem:unAimGun() end
-												toggleSprint(down)				
-											end
+			if key == (InputComp:GetBindCode("Core","Sprint") or ClientSettings.DefaultKeys.Sprint)  then
+				if Character then
+					if Humanoid then
+						if  Humanoid.Health > 0 then
+							if  Humanoid.Sit then return end
+							if not CameraService.CutsceneSysBusy then
+								if not CurrentItem:IsPlayingAnim()  then
+									if CurrentItem.Value then
+										if not CurrentItem:IsPlayingAnim() then
+											if CurrentItem.Aimed then CurrentItem:unAimGun() end
+											toggleSprint(down)				
 										end
+									end
 
-									end			
-								end
+								end			
 							end
 						end
 					end
 				end
-			end))
+			end
+		end))
 		table.insert(Connections, Humanoid.Died:Connect(function()
 			RemoteService.send("Server","ResetViewModel",{
 				gunIgnore = ViewModel.gunIgnore;
@@ -1593,7 +1604,6 @@ do
 				Grips = ViewModel.Grips;
 			})
 		end))
-		end)
 		local resettingPose = false
 		table.insert(Connections,MH.SprintChanged:Connect(function(sprint)
 			if not CharState.RunTransition then
@@ -1614,10 +1624,10 @@ do
 						tween("Joint",ViewModel.Grips.Right, false, sprint  and CurrentItem:getArmPos("running","Grip") or CurrentItem:getArmPos(basePos,"Grip"), getAlpha("OutSine"), 0.4)
 					]]--
 					--elseif CurrentItem.Value then
-						tween("Joint",ViewModel.LWeld, armC0[1],sprint and CurrentItem:getArmPos("running","Left") or CurrentItem:getArmPos(basePos,"Left"), getAlpha("Sharp"),  0.4)
-						tween("Joint",ViewModel.RWeld, armC0[2],sprint and CurrentItem:getArmPos("running","Right") or CurrentItem:getArmPos(basePos,"Right"), getAlpha("OutSine"), 0.4)
-						tween("Joint",ViewModel.Grips.Right, false, sprint  and CurrentItem:getArmPos("running","Grip") or CurrentItem:getArmPos(basePos,"Grip"), getAlpha("OutSine"), 0.4)
-						print("Running")
+					tween("Joint",ViewModel.LWeld, armC0[1],sprint and CurrentItem:getArmPos("running","Left") or CurrentItem:getArmPos(basePos,"Left"), getAlpha("Sharp"),  0.4)
+					tween("Joint",ViewModel.RWeld, armC0[2],sprint and CurrentItem:getArmPos("running","Right") or CurrentItem:getArmPos(basePos,"Right"), getAlpha("OutSine"), 0.4)
+					tween("Joint",ViewModel.Grips.Right, false, sprint  and CurrentItem:getArmPos("running","Grip") or CurrentItem:getArmPos(basePos,"Grip"), getAlpha("OutSine"), 0.4)
+					print("Running")
 
 					--end
 
@@ -1633,7 +1643,7 @@ do
 		end))		
 		InputComp.CharacterController:Enable(true)
 	end)
-	player.DescendantRemoving:Connect(function(c)
+	workspace.DescendantRemoving:Connect(function(c)
 		if c == Character then
 			if (not c.Parent) then --or c.Parent == workspace.CorpseIgnore then
 
@@ -1653,7 +1663,7 @@ do
 							CharacterJanitor = Jan_Char;
 							RS = RunService;
 							ViewModel = ViewModel;
-							taskSpawn = runAsync;
+							taskSpawn = task.spawn;
 							CharState = CharState;
 							RemoteService = RemoteService;
 							DepthOfField = game.Lighting.ItemDepth;
@@ -1760,7 +1770,7 @@ local function UpdateGeneralKeys()
 			pl.DefineGeneralInput({
 				Events = EventUtils;
 				CharState  = CharState;
-				
+
 			}, Components)
 		end
 	end	

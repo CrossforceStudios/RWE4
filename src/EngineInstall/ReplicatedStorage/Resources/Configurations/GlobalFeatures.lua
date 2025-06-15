@@ -19,4 +19,7 @@ return {
     Stocks = false;
     -- Health state for everyone
     HealthState = false;
+    -- Use default sprint state (cosmetic)?
+	-- NOTE: if you make your own keybind system (synced with the InputComponent), change this to false.
+	SprintDefaults = true;
 }

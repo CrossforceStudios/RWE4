@@ -62,9 +62,9 @@ function MovementHelper:ToggleSprint(player,cs,keyDown)
 	if RunService:IsClient() then
 		RemoteService.fetch("Server","ToggleSprint",keyDown,self.SprintMulti >= 1.25)
 	end
-	local stats = player.Character
-	if stats then
-		self.Sprint = stats:GetAttribute("Sprinting")
+	local stats2 = player.Character
+	if stats2 then
+		self.Sprint = stats2:GetAttribute("Sprinting")
 		if self.Sprint ~= nil then
 			self.SprintChanged:Fire(self.Sprint)
 		end
@@ -93,10 +93,10 @@ function MovementHelper:GetWalkSpeed(baseWalkSpeed,player,agent,iC,stance)
 	if baseWalkSpeed then
 		self.BWS = baseWalkSpeed
 	end
-	local stats = player.Character
-	if stats then
-		self.walkSpeedMult = stats:GetAttribute("walkSpeedMult")
-		local currentS, maxS = stats:GetAttribute("CurrentStamina"), stats:GetAttribute("MaxStamina")
+	local stats2 = player.Character
+	if stats2 then
+		self.walkSpeedMult = stats2:GetAttribute("walkSpeedMult")
+		local currentS, maxS = stats2:GetAttribute("CurrentStamina"), stats2:GetAttribute("MaxStamina")
 		local percent = math.clamp(currentS/maxS, 0, 1)
 		if agent and Resources:FindGlobalFeature("HealthState") then
 			repeat RunService.Heartbeat:Wait() until pcall(function() return agent:GetStateProperty("Unconscious") end)
@@ -104,11 +104,11 @@ function MovementHelper:GetWalkSpeed(baseWalkSpeed,player,agent,iC,stance)
 				return 0
 			end
 		end
-		if not iC.Binds["Core"] then
+		if (not iC.Binds["Core"]) and (not Resources:FindGlobalFeature("SprintDefaults")) then
 			return (1*self.walkSpeedMult*self.BWS)/math.clamp(stance*2,1,8)
 		end
-		self.walkPenalty = stats:GetAttribute("walkPenalty") 
-		return  ((((((self.Sprint and stance == 0 and percent > 0) and 1.5 or 1) * self.walkSpeedMult * self.BWS)/math.clamp(stance*2,1,8)) - (self.walkPenalty or 0)) + (stats:GetAttribute("offsetSpeed") or 0)) * self.SprintMulti
+		self.walkPenalty = stats2:GetAttribute("walkPenalty") 
+		return  ((((((self.Sprint and stance == 0 and percent > 0) and 1.5 or 1) * self.walkSpeedMult * self.BWS)/math.clamp(stance*2,1,8)) - (self.walkPenalty or 0)) + (stats2:GetAttribute("offsetSpeed") or 0)) * self.SprintMulti
 	end
 	return baseWalkSpeed
 end

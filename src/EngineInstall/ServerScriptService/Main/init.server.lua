@@ -283,19 +283,7 @@ function runInit(plr: Player)
 				end)
 			end]]--
 		end),"Disconnect")
-		for k, v in pairs({
-			MaxStamina = 100;
-			CurrentStamina = 100;
-			Sprinting = false;
-			walkPenalty = 0;
-			offsetSpeed = 0;
-			MaxOxygen = 1000;
-			Oxygen = 1000;
-			walkSpeedMult = 1;
-			Stance = "Stand";
-			PrevStance = "Stand";
-			Animation = "None";
-			}) do
+		for k, v in ServerSettings.CharacterStats do
 			c:SetAttribute(k, v)
 		end
 	end)
