@@ -84,6 +84,7 @@ local isIgnored = Resources:LoadLibrary("isIgnored")
 local WeaponUtils = Resources:LoadLibrary("WeaponUtils")
 local Signal = Resources:LoadLibrary("Signal")
 local EasingFunction = Resources:LoadLibrary("EasingFunctions")
+local MH = Resources:LoadLibrary("MovementHelper")
 
 -- Necessary configs
 local Magazines = Resources:LoadConfiguration("Magazine")
@@ -180,6 +181,7 @@ do
 	local idleAlpha = 1
 	local walkAlpha = 0
 	local runAlpha = 0
+	local isMoveEnabled = true;
 	local walkAnim = "WalkRifle"
 	local aimAlpha = 0
 	local leanAnim = {
@@ -197,6 +199,14 @@ do
 	local MotionVector = VEC2(0,0)
 	CharState.getStanceIndex = function(self,stance)
 		return stances[stance]
+	end
+
+	CharState.calcWalkSpeed = function(self,baseWalkSpeed)
+		return if isMoveEnabled then MH:GetWalkSpeed(baseWalkSpeed,player,CharacterParts.HAgent,InputComp,Stance) else 0
+	end
+
+	CharState.getProneSpeed = function(self,baseWalkSpeed)
+		return MH:GetStanceSpeed(2)
 	end
 
 	CharState.changeStance = function(self,stance,lean,silent)
@@ -404,6 +414,10 @@ do
 				return lastPos
 			elseif key == "pdist" then
 				return pDist
+			elseif key == "runningtrans" then
+				return RunningTrans
+			elseif key == "runtransition" then
+				return RunTransition
 			else
 				return nil;
 			end
@@ -427,6 +441,8 @@ do
 				if CurrentItem.Value then
 					CharState:chooseWalkAnim()
 				end
+			elseif key == "runtransition" then
+				RunTransition = v
 			elseif key == "lastpos" then
 				lastPos = v
 			elseif key == "pdist" then
@@ -447,6 +463,19 @@ do
 		end
 	})
 end
+-----
+local function toggleSprint(bool)
+	if AndList({
+		(not CurrentItem.Aimed);
+		(not CharState.RunTransition);
+		(not CurrentItem:IsPlayingAnim());			
+		(CharState.currentState ~= "Crawling");
+		(CharState.currentState ~= "Diving");
+		}) then
+		MH:ToggleSprint(player,CameraService,bool)
+	end
+end
+
 -----
 local function currentGripArm()
 	return ViewModel.Grips.Current == "Left" and CharacterParts.LArm or CharacterParts.RArm
@@ -978,7 +1007,7 @@ do
 				return stockType 
 			elseif key == "type" then
 				return Type 
-			elseif key == "animations"
+			elseif key == "animations" then
 				return Animations
 			end
 		end,
@@ -1098,8 +1127,8 @@ function startRenders()
 		soundUpdate(dt)					
 	end)
 	RenderEngine:AddGeneralRender(function(dt)
-		--CharState.walkSpeed = CharState:calcWalkSpeed(CurrentItem.Settings and CurrentItem.Settings.baseWalkSpeed or 14)
-		--Humanoid.WalkSpeed = CharState.walkSpeed
+		CharState.walkSpeed = CharState:calcWalkSpeed(CurrentItem.Settings and CurrentItem.Settings.baseWalkSpeed or 14)
+		Humanoid.WalkSpeed = CharState.walkSpeed
 		if  ViewModel.Shadow then
 			ViewModel.Shadow:Update(Humanoid.Sit)	
 		end	
@@ -1501,6 +1530,58 @@ do
 		table.insert(Connections,Humanoid.StateChanged:Connect(function(old,new)
 			InputComp.CharacterController.State = (new)
 		end))
+		table.insert(Connections,InputComp.KeyChanged:Connect(function(key,down)
+				--[[
+				local oldLean = CharState.leanAnim.Rot
+				if not Humanoid.Sit then
+					local tA = aimTime(CurrentItem.Value)
+					if  (not CurrentItem:IsPlayingAnim()) and (not CharState.stanceTrans) and (CharState.Stance <= 1)  then
+						local lr = CharState.leanAnim.Rot
+						if InputComp:GetBindCode("Core","LeanLeft") == key  or InputComp:GetBindCode("Core","LeanRight") == key then
+							RemoteService.send("Server","SignalChangeStance", (down) and (InputComp:GetBindCode("Core","LeanLeft") == key and  "LeanLeft" or "LeanRight") or stances[CharState.Stance + 1])
+						end
+
+						Tween.new(tA, getAlpha("Deceleration"), "Lean", true, function(x)
+							if InputComp:GetBindCode("Core","LeanLeft") == key then
+								CharState.leanAnim.Rot = Lerps.number(oldLean,(down) and -1 or 0,x)
+							elseif key == InputComp:GetBindCode("Core","LeanRight") then
+								CharState.leanAnim.Rot = Lerps.number(oldLean,(down) and 1 or 0,x)	
+							end
+							CharState.leanAnim.Pos.g = CharState.leanAnim.Rot * CharState.leanAnim.Factor
+							CharState:changeStance(CharState.Stance,true)
+						end)
+					else
+						Tween.new(tA, getAlpha("Deceleration"), "LeanB", true, function(x)
+							CharState.leanAnim.Rot = Lerps.number(oldLean,0,x)
+							CharState.leanAnim.Pos.g = CharState.leanAnim.Rot * CharState.leanAnim.Factor
+							CharState:changeStance(CharState.Stance,true)
+
+						end)
+					end
+				end
+				CharState.leanAnim.Change = (CharState.leanAnim.Rot ~= oldLean)
+				]]--
+				if key == InputComp:GetBindCode("Core","Sprint") or ClientSettings.DefaultKeys.Sprint  then
+					if Character then
+						if Humanoid then
+							if  Humanoid.Health > 0 then
+								if  Humanoid.Sit then return end
+								if not CameraService.CutsceneSysBusy then
+									if not CurrentItem:IsPlayingAnim()  then
+										if CurrentItem.Value then
+											if not CurrentItem:IsPlayingAnim() then
+												if CurrentItem.Aimed then CurrentItem:unAimGun() end
+												toggleSprint(down)				
+											end
+										end
+
+									end			
+								end
+							end
+						end
+					end
+				end
+			end))
 		table.insert(Connections, Humanoid.Died:Connect(function()
 			RemoteService.send("Server","ResetViewModel",{
 				gunIgnore = ViewModel.gunIgnore;
@@ -1512,6 +1593,44 @@ do
 				Grips = ViewModel.Grips;
 			})
 		end))
+		end)
+		local resettingPose = false
+		table.insert(Connections,MH.SprintChanged:Connect(function(sprint)
+			if not CharState.RunTransition then
+				CharState.RunTransition = true
+				if sprint then
+					if CharState.Stance == 1 or CharState.Stance == 2 then 
+						CharState:changeStance("Stand")
+					end
+				end	
+				if CurrentItem.Value and (not CurrentItem:IsPlayingAnim()) then
+					local basePos = WeaponUtils:GetBasePose(CurrentItem.Value)
+					--[[if CurrentItem.FiringSystem and CurrentItem.FiringSystem.CurrentMode then
+						if CurrentItem.FiringSystem.CurrentMode.Name:upper()  ~= "BAYONET" then	
+								return
+						end
+						tween("Joint",ViewModel.LWeld, armC0[1],sprint and CurrentItem:getArmPos("running","Left") or CurrentItem:getArmPos(basePos,"Left"), getAlpha("Sharp"),  0.4)
+						tween("Joint",ViewModel.RWeld, armC0[2],sprint and CurrentItem:getArmPos("running","Right") or CurrentItem:getArmPos(basePos,"Right"), getAlpha("OutSine"), 0.4)
+						tween("Joint",ViewModel.Grips.Right, false, sprint  and CurrentItem:getArmPos("running","Grip") or CurrentItem:getArmPos(basePos,"Grip"), getAlpha("OutSine"), 0.4)
+					]]--
+					--elseif CurrentItem.Value then
+						tween("Joint",ViewModel.LWeld, armC0[1],sprint and CurrentItem:getArmPos("running","Left") or CurrentItem:getArmPos(basePos,"Left"), getAlpha("Sharp"),  0.4)
+						tween("Joint",ViewModel.RWeld, armC0[2],sprint and CurrentItem:getArmPos("running","Right") or CurrentItem:getArmPos(basePos,"Right"), getAlpha("OutSine"), 0.4)
+						tween("Joint",ViewModel.Grips.Right, false, sprint  and CurrentItem:getArmPos("running","Grip") or CurrentItem:getArmPos(basePos,"Grip"), getAlpha("OutSine"), 0.4)
+						print("Running")
+
+					--end
+
+				else
+					CharState.RunTransition = false	
+					return 
+				end
+				task.delay(0.4,function()
+					CharState.RunTransition = false	
+				end)
+			end
+
+		end))		
 		InputComp.CharacterController:Enable(true)
 	end)
 	player.DescendantRemoving:Connect(function(c)

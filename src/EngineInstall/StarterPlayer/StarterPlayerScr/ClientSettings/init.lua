@@ -85,6 +85,9 @@ local ClientSettings = {
 			math.sin(a * 3 / 4) / 35
 		)
 	end;
+	DefaultKeys = {
+		Sprint = Enum.KeyCode.LeftShift;
+	};
 	Anims = {
 		CancelCache = {
 			["Reload"] = false;

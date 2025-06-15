@@ -17,4 +17,6 @@ return {
     Collisions = false;
     -- Stocks for everyone
     Stocks = false;
+    -- Health state for everyone
+    HealthState = false;
 }

@@ -25,6 +25,7 @@ local Signal = Resources:LoadLibrary("Signal")
 local MathRound = Resources:LoadLibrary("MathRound")
 local WeaponUtils = Resources:LoadLibrary("WeaponUtils")
 local InventoryService = Resources:LoadLibrary("InventoryService")
+local Enumeration = Resources:LoadLibrary("Enumeration")
 
 --- Configs
 local AttachmentsList = Resources:LoadConfiguration("Attachment")
@@ -282,7 +283,21 @@ function runInit(plr: Player)
 				end)
 			end]]--
 		end),"Disconnect")
-
+		for k, v in pairs({
+			MaxStamina = 100;
+			CurrentStamina = 100;
+			Sprinting = false;
+			walkPenalty = 0;
+			offsetSpeed = 0;
+			MaxOxygen = 1000;
+			Oxygen = 1000;
+			walkSpeedMult = 1;
+			Stance = "Stand";
+			PrevStance = "Stand";
+			Animation = "None";
+			}) do
+			c:SetAttribute(k, v)
+		end
 	end)
 	for _, pl in ServerPlugins do
 		if pl.PlayerAdded then
@@ -434,7 +449,8 @@ task.spawn(function()
 				Signal = Signal;
 				Math = {
 					Round = MathRound;
-				}
+				};
+				Enumeration = Enumeration;
 			}, Resources:GetLocalTable("Components"))
 		end
 	end
