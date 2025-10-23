@@ -31,6 +31,19 @@ local ClientSettings = {
 			{ id = "rbxassetid://182393478", weight = 10, priority = Enum.AnimationPriority.Idle; } 
 		},
 	};
+	Loadout = {
+		Slots = {"Primary";"Secondary";"Grenade";"Launcher";"Melee";};
+		Keys = {
+			[Enum.KeyCode.One] = 1;
+			[Enum.KeyCode.Two] = 2;
+			[Enum.KeyCode.Three] = 3;
+			[Enum.KeyCode.Four] = 4;
+			[Enum.KeyCode.Five] = 5;
+		};
+		OnChange = function(UIS, x, Character)
+			
+		end,
+	};
 	-- Replace the run, climb, idle and walk anims with your own.
 	HumanoidAnimIds = {
 		Zombie = {

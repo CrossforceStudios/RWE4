@@ -546,7 +546,9 @@ function WU:EquipItem(plr: Player, item: Model, PlayerLoadouts: {})
 		if not plr.Character:FindFirstChild("Type") then
 			item.Parent = plr.Character
 			PlayerLoadouts[plr].CurrentWeapon = item
-			EventUtils:FireEvent("CampaignItemEquipped",plr, item)
+			if EventUtils:GetEvent("CampaignItemEquipped") then
+				EventUtils:FireEvent("CampaignItemEquipped",plr, item)
+			end
 		end
 	end
 end

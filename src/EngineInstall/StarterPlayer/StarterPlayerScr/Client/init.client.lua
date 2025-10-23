@@ -7,6 +7,8 @@ local UIS = game:GetService("UserInputService")
 local player = Players.LocalPlayer
 local Components = Resources:GetLocalTable("Components")
 Resources:AddComponent("Tweener", Resources:LoadLibrary("TweenHandler")())
+Resources:AddComponent("Sound", Resources:LoadLibrary("SoundSystem"))
+
 --- math constants
 local RAD = math.rad
 local COS = math.cos;
@@ -89,6 +91,7 @@ local MH = Resources:LoadLibrary("MovementHelper")
 -- Necessary configs
 local Magazines = Resources:LoadConfiguration("Magazine")
 local PostAnimHooks = Resources:LoadConfiguration("PostAnimHooks")
+local CharacterStateList = Resources:LoadConfiguration("CharacterStates")
 
 -- Shortcuts
 local VEC2 = Vector2.new
@@ -181,6 +184,7 @@ do
 	local crawlAlpha = 0
 	local idleAlpha = 1
 	local walkAlpha = 0
+	local onGround = true
 	local runAlpha = 0
 	local isMoveEnabled = true;
 	local walkAnim = "WalkRifle"
@@ -409,6 +413,8 @@ do
 				return Lean
 			elseif key == "motionvector" then
 				return MotionVector
+			elseif key == "moveenabled" then
+				return isMoveEnabled
 			elseif key == "movedirection" then
 				return Humanoid.MoveDirection
 			elseif key == "lastpos" then
@@ -421,6 +427,8 @@ do
 				return RunTransition
 			elseif key == "walkspeed" then
 				return walkSpeedSpring.p
+			elseif key == "grounded" then
+				return onGround
 			else
 				return nil;
 			end
@@ -1045,6 +1053,291 @@ do
 	})
 end
 -----
+-- Loadout
+-----
+local loadoutCache = {}
+loadoutCache.Loadout = {}
+
+local loadoutInput do
+	local tween = Resources:GetComponent("Tweener")
+	local index = 1
+	local isScrolling = false
+	local changeWeaponRequested = false
+	local prevIndex = 1
+	local EnumKeys = ClientSettings.Loadout.Keys;
+	loadoutInput = setmetatable({
+		getSlot = function(self,keyCode)
+			return EnumKeys[keyCode]
+		end;
+		changeWeaponImmediate = function(self)
+			if not (CharState.MoveEnabled) then return end
+			local nextWeapon = loadoutCache.Loadout[index] or loadoutCache.Loadout[index+1]
+			if nextWeapon  then
+				if nextWeapon ~= CurrentItem.Value then
+					local newS = Resources:LoadItemConfig(nextWeapon.Name)
+					if newS then
+						if newS.equipSettings then
+							tween("Joint",ViewModel.LWeld,false,newS.equipSettings.leftArmC1,getAlpha("Standard"),0.2)
+							tween("Joint",ViewModel.RWeld,false,newS.equipSettings.rightArmC1,getAlpha("Standard"),0.2)		
+						end
+					end
+
+
+				end
+
+				if CurrentItem.Type == "Binoculars" then
+					CurrentItem.Value:SetAttribute("FOV", nil)
+				end
+				RemoteService.send("Server","UnequipItems")
+				RemoteService.send("Server","EquipItem",nextWeapon)
+			end
+		end;
+		unequipAll = function(self)
+			local newS = CurrentItem.Settings
+			if newS then
+				if newS.equipSettings then
+					tween("Joint",ViewModel.LWeld,false,newS.equipSettings.leftArmC1,getAlpha("Standard"),0.2)
+					tween("Joint",ViewModel.RWeld,false,newS.equipSettings.rightArmC1,getAlpha("Standard"),0.2)		
+				end
+			end
+			prevIndex = index
+			RemoteService.send("Server","UnequipItems")
+		end,
+		changeWeapon = function(self)
+			if not (CharState.MoveEnabled) then return end			
+			if not isScrolling and changeWeaponRequested then
+				isScrolling = true
+				changeWeaponRequested = false
+				local nextWeapon = loadoutCache.Loadout[index]
+
+				if nextWeapon ~= CurrentItem.Value  and (not CurrentItem:IsPlayingAnim()) then
+					local newS = Resources:LoadItemConfig(nextWeapon.Name)
+					if newS then
+						if newS.equipSettings then
+							tween("Joint",ViewModel.LWeld,false,newS.equipSettings.leftArmC1,getAlpha("Standard"),0.2)
+							tween("Joint",ViewModel.RWeld,false,newS.equipSettings.rightArmC1,getAlpha("Standard"),0.2)		
+						end
+					end
+					RemoteService.send("Server","UnequipItems")
+					RemoteService.send("Server","EquipItem",nextWeapon)
+				end
+				isScrolling = false	
+			end
+
+		end;
+		requestWeapChange = function(self)
+			changeWeaponRequested  = true;
+			self:changeWeapon()
+		end;
+		equipFist = function(self)
+			local newS = CurrentItem.Settings
+			if newS then
+				if newS.equipSettings then
+					tween("Joint",ViewModel.LWeld,false,newS.equipSettings.leftArmC1,getAlpha("Standard"),0.2)
+					tween("Joint",ViewModel.RWeld,false,newS.equipSettings.rightArmC1,getAlpha("Standard"),0.2)		
+				end
+			end
+			RemoteService.send("Server","UnequipItems")
+			local nextWeapon = player.Carry:FindFirstChild("RoleFist")
+			RemoteService.send("Server","EquipItem",nextWeapon)
+		end,
+		getIndex = function(self)
+			return index
+		end;
+		getPrevIndex = function(self)
+			return prevIndex;
+		end,
+		setIndex = function(self,index2)
+			index = index2
+		end
+	},{
+		__index = function(self,k)
+
+		end;
+	})
+	Resources:AddComponent("LoadoutInput", loadoutInput)
+
+end
+RemoteService.listen("Client","Send","SwitchToWeapon",function(index)
+	local nextWeapon = loadoutCache.Loadout[index]
+	local tween = Resources:GetComponent("Tweener")
+	if nextWeapon  then
+		if nextWeapon ~= CurrentItem.Value then
+			local newS = Resources:LoadItemConfig(nextWeapon.Name)
+			if newS then
+				if newS.equipSettings then
+					tween("Joint",ViewModel.LWeld,false,newS.equipSettings.leftArmC1,getAlpha("Standard"),0.2)
+					tween("Joint",ViewModel.RWeld,false,newS.equipSettings.rightArmC1,getAlpha("Standard"),0.2)		
+				end
+			end
+		end
+		RemoteService.send("Server","UnequipItems")
+		RemoteService.send("Server","EquipItem",nextWeapon)
+	end
+end)
+local resultsList = ClientSettings.Loadout.Slots;
+RemoteService.listen("Client","Fetch","InitLoadoutData",function(loadoutList)
+	loadoutCache.Loadout = loadoutList
+	local gKey = table.find(resultsList, "Grenade")
+	if gKey then
+		if loadoutList[gKey] then
+			if loadoutList[gKey].Type.Value == "Grenade" then
+				EventUtils:FireEvent("GrenadeSwitch", loadoutList[gKey], true)
+			end
+		end
+	end
+	
+	return true
+end)	
+InputComp.AddLoadoutScheme("LoadoutPC",
+	Enum.UserInputType.Keyboard,
+	"Individual",
+	ClientSettings.Loadout.Keys,
+	nil
+):Connect(function(x)
+	local tween = Resources:GetComponent("Tweener")
+	if Character then
+		if InputComp:IsInputDown(Enum.KeyCode.LeftShift) and (not Character:FindFirstChild("RoleFist")) then
+			local newS = CurrentItem.Settings
+			if newS then
+				if newS.equipSettings then
+					tween("Joint",ViewModel.LWeld,false,newS.equipSettings.leftArmC1,getAlpha("Standard"),0.2)
+					tween("Joint",ViewModel.RWeld,false,newS.equipSettings.rightArmC1,getAlpha("Standard"),0.2)		
+				end
+			end
+			RemoteService.send("Server","UnequipItems")
+			local nextWeapon = player.Carry:FindFirstChild("RoleFist")
+			RemoteService.send("Server","EquipItem",nextWeapon)
+			return
+		end
+		if loadoutCache.Loadout[x] and loadoutCache.Loadout[x].Parent then
+			if x == table.find(resultsList, "Grenade") then
+				local gc = player.Carry:GetAttribute("GrenadeCount") 
+				if gc <= 0 then
+					local errorSound = Resources:GetLocalSound("ErrorL")
+					errorSound.SoundGroup = Components.Sound:GetSoundCat("UI_FX")
+					errorSound.SoundId = "rbxassetid://136075117";
+					errorSound:Play()
+					return 
+				end
+			end
+			loadoutInput:setIndex(x)
+			loadoutInput:requestWeapChange()
+		else
+			local errorSound = Resources:GetLocalSound("ErrorL")
+			errorSound.SoundGroup = Components.Sound:GetSoundCat("UI_FX")
+			errorSound.SoundId = "rbxassetid://136075117";
+			errorSound:Play()
+		end
+	end
+end)
+InputComp.AddLoadoutScheme("LoadoutXbox",
+	Enum.UserInputType.Gamepad1,
+	"Individual",
+	{},
+	Enum.KeyCode.ButtonY,
+	7,
+	function()
+
+		local results = {};
+		local resD = {};
+		local counter = 1
+		for i, v in ipairs(resultsList) do
+			if loadoutCache.Loadout[i] then
+				resD[v] = loadoutCache.Loadout[i];
+				results[counter] = v;
+				counter += 1
+			end
+		end
+		return results, resD;
+	end
+):Connect(function(xChoice)
+	local tween = Resources:GetComponent("Tweener")
+	if Character then
+		local x = table.find(resultsList, xChoice)
+		if InputComp:IsInputDown(Enum.KeyCode.ButtonX) and (not Character:FindFirstChild("RoleFist")) then
+			local newS = CurrentItem.Settings
+			if newS then
+				if newS.equipSettings then
+					tween("Joint",ViewModel.LWeld,false,newS.equipSettings.leftArmC1,getAlpha("Standard"),0.2)
+					tween("Joint",ViewModel.RWeld,false,newS.equipSettings.rightArmC1,getAlpha("Standard"),0.2)		
+				end
+			end
+			RemoteService.send("Server","UnequipItems")
+			local nextWeapon = player.Carry:FindFirstChild("RoleFist")
+			RemoteService.send("Server","EquipItem",nextWeapon)
+			return
+		end
+		local resultsList = ClientSettings.Loadout.Slots;
+		local results = {};
+		print(x)
+		for i = 1 , #loadoutCache.Loadout  do
+			if loadoutCache.Loadout[i] then
+				results[#results+1] = resultsList[i]
+			end
+		end
+		if not loadoutCache.Loadout[x] then
+			return
+		end
+		loadoutInput:setIndex(x)
+		loadoutInput:requestWeapChange()
+	end
+end)
+InputComp.AddLoadoutScheme("LoadoutMobile",
+	Enum.UserInputType.Touch,
+	"Individual",
+	{},
+	Enum.KeyCode.ButtonY,
+	7,
+	function()
+		local resultsList = ClientSettings.Loadout.Slots;
+		local resD = {};
+		local results = {};
+		for i, v in ipairs(resultsList) do
+			if loadoutCache.Loadout[i] then
+
+				resD[v] = loadoutCache.Loadout[i];
+			end
+			results[i] = v;
+
+		end
+		return results, resD;
+	end
+):Connect(function(x)
+	local tween = Resources:GetComponent("Tweener")
+
+	if Character then
+		if x == 10 and (not Character:FindFirstChild("RoleFist")) then
+			local newS = CurrentItem.Settings
+			if newS then
+				if newS.equipSettings then
+					tween("Joint",ViewModel.LWeld,false,newS.equipSettings.leftArmC1,getAlpha("Standard"),0.2)
+					tween("Joint",ViewModel.RWeld,false,newS.equipSettings.rightArmC1,getAlpha("Standard"),0.2)		
+				end
+			end
+			RemoteService.send("Server","UnequipItems")
+			local nextWeapon = player.Carry:FindFirstChild("RoleFist")
+			RemoteService.send("Server","EquipItem",nextWeapon)
+			return
+		end
+		local resultsList = ClientSettings.Loadout.Slots;
+		local results = {};
+		for i = 1 , #loadoutCache.Loadout  do
+			if loadoutCache.Loadout[i] then
+				results[#results+1] = resultsList[i]
+			end
+		end
+		if not loadoutCache.Loadout[x] then
+			return
+		end
+		loadoutInput:setIndex(x)
+		loadoutInput:requestWeapChange()
+		if ClientSettings.Loadout.OnChange then
+			ClientSettings.Loadout.OnChange(UIS,x,Character)
+		end
+	end
+end)
+------
 CameraService:startClient()
 RemoteService.startClient()
 local soundUpdate do
@@ -1144,7 +1437,24 @@ function startRenders()
 			ViewModel.Shadow:Update(Humanoid.Sit)	
 		end	
 	end)
+	RenderEngine:AddGeneralRender(function(dt)
+		if not CurrentItem.Settings then return end
+		local Velocity =CharacterParts.Torso.CFrame:vectorToObjectSpace(CharacterParts.Torso.Velocity) 
+		local cond = true
+		if cond then
+			for _, state in ipairs(CharacterStateList) do
+				if state.Condition then
+					if state.Condition(CharState,CurrentItem,Humanoid,Velocity,InputComp) then
+						if state.PreProcess then
+							state.PreProcess(CharState,CurrentItem,Humanoid,Velocity)
 
+						end
+						CharState.currentState = state.Name
+					end
+				end
+			end
+		end
+	end)
 	RenderEngine:Start()
 end
 RemoteService.listen("Client","Send","SetPartsClient",function(dict)
@@ -1456,6 +1766,7 @@ RemoteService.listen("Client","Send","SetupBolts",function(bW,item)
 end)
 -------
 do
+	local Char_Jan = Janitor.new()
 	local tween = Resources:GetComponent("Tweener")
 	player.CharacterAdded:Connect(function(ch)
 		Character = ch

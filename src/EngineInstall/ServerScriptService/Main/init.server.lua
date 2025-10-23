@@ -33,6 +33,8 @@ local AOptions = Resources:LoadConfiguration("AttachmentGroups")
 local Cartridges =  Resources:LoadConfiguration("Cartridge")
 local AttachmentModules = Resources:LoadConfiguration("AttachmentModules")
 local MagazinesList = Resources:LoadConfiguration("Magazine")
+local LoadoutConfig = Resources:LoadConfiguration("LoadoutConfig")
+
 -- Event System + Server Plugins 
 local ServerSettings = require(script.Parent.ServerSettings)
 for _, event in ServerSettings.Events do
@@ -67,12 +69,19 @@ local jans = {};
 local MagazineLibraries = {};
 local AttachmentLibraries = {};
 local furnitures = {};
+local PlayerLoadouts = {}
 
 ------
 function runInit(plr: Player)
 	AttachmentLibraries[plr] = {}
 	MagazineLibraries[plr] = {}
 	furnitures[plr] = {};
+	do
+		local Carry = Instance.new("Folder")
+		Carry.Name = "Carry"
+		Carry.Parent = plr
+	end
+	PlayerLoadouts[plr] = InventoryService.LoadoutClass.new("Main")
 	local function aggregateWeapon(item, useMags)
 		if  WeaponUtils:HasItemCapability(item, "Aggregate") then
 			AttachmentLibraries[plr][item.Name] = {};
@@ -164,6 +173,40 @@ function runInit(plr: Player)
 			end
 		end
 	end 
+	do
+		local initLoadout = LoadoutConfig.InitialLoadout
+		local i = 0;
+		for i, name in LoadoutConfig.Slots do
+			local w = initLoadout[name]
+			if w then
+				local we = ReplicatedStorage.Resources.Items:FindFirstChild(w)
+				if we then
+					we = we:Clone()
+					we.Parent = plr.Carry
+					--[[
+					if we.Type.Value == "Melee" then
+						mS:AddWeapon(we,plr)
+					end
+					if we.Type.Value == "Bomb" then
+						if we.BombType.Value == "MinePack" then
+							local data = {
+								BombCount = 3;
+								Detonated = false;
+							}
+							for k, v in pairs(data) do
+								we:SetAttribute(k, v)
+							end
+							game.CollectionService:AddTag(we, game.HttpService:GenerateGUID(false))
+						end		
+					end]]--
+					PlayerLoadouts[plr][name] = we
+					PlayerLoadouts[plr].CurrentItems[i] = we
+				end
+			end
+		end
+		RemoteService.send("Client",plr,"UpdateLoadoutList",initLoadout)
+		RemoteService.fetch("Client",plr,"InitLoadoutData",PlayerLoadouts[plr].CurrentItems)
+	end
 	plr.CharacterAdded:Connect(function(c)
 		local head = c:WaitForChild("Head",200)
 		local torso  = c:WaitForChild("Torso",200)
@@ -393,6 +436,9 @@ RemoteService.listenU("Server","Send","PlayItemSoundServer",function(player,item
 			m:Hear(player,cf.p)
 		end
 	end]]--
+end)
+RemoteService.listen("Server","Send","EquipItem",function(plr,item)
+	WeaponUtils:EquipItem(plr, item, PlayerLoadouts)
 end)
 -----
 Players.PlayerAdded:Connect(function(plr)

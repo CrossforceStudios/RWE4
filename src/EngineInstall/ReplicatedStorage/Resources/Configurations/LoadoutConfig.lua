@@ -6,6 +6,13 @@ return {
 		"Launcher";
 		"Melee";
 	};
+	InitialLoadout =  {
+		["Primary"] = "AutoBlaster";
+		["Secondary"] = "";
+		["Grenade"] = "";
+		["Launcher"] = "";
+		["Melee"] = "";
+	};
 	PostValidators = {
 		["Primary"] = function(item)
 			if item:FindFirstChild("GunType") then
