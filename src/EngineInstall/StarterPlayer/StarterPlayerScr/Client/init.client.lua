@@ -7,8 +7,6 @@ local UIS = game:GetService("UserInputService")
 local player = Players.LocalPlayer
 local Components = Resources:GetLocalTable("Components")
 Resources:AddComponent("Tweener", Resources:LoadLibrary("TweenHandler")())
-Resources:AddComponent("Sound", Resources:LoadLibrary("SoundSystem"))
-
 --- math constants
 local RAD = math.rad
 local COS = math.cos;
@@ -87,6 +85,7 @@ local WeaponUtils = Resources:LoadLibrary("WeaponUtils")
 local Signal = Resources:LoadLibrary("Signal")
 local EasingFunction = Resources:LoadLibrary("EasingFunctions")
 local MH = Resources:LoadLibrary("MovementHelper")
+local Water = Resources:LoadLibrary("Water")
 
 -- Necessary configs
 local Magazines = Resources:LoadConfiguration("Magazine")
@@ -98,6 +97,8 @@ local VEC2 = Vector2.new
 local V3 = Vector3.new
 local RAD = math.rad
 local RNG = Random.new()
+local MIN = math.min
+local MAX = math.max
 ----
 _G.CameraAng = VEC2(0,0)
 _G.gunRecoilSpring = Spring.new(0.45,15,V3())
@@ -105,6 +106,8 @@ _G.gunRecoilSpring = Spring.new(0.45,15,V3())
 ----
 local UP_RATE = 0.05
 local itemTransChange, BoltWelds
+local Jan_Char = Janitor.new()
+
 -- Important Client Parts
 local ClientSettings = require(script.Parent:WaitForChild("ClientSettings", 20))
 local ItemEquipped = Signal.new()
@@ -145,6 +148,7 @@ local  cRecoilAnim = {
 }	
 
 do 
+	local crawlCamRot = 0;
 	local bWS = 14;
 	local swaySpring = Spring.new(1, 4, V3())
 	local stances = {} do
@@ -186,6 +190,8 @@ do
 	local walkAlpha = 0
 	local onGround = true
 	local runAlpha = 0
+	local crawlAng = 0
+	local moveAng = 0
 	local isMoveEnabled = true;
 	local walkAnim = "WalkRifle"
 	local aimAlpha = 0
@@ -201,6 +207,16 @@ do
 		Ang = 0;
 		Code = 0;
 	};
+	local function getStance(n)
+		local res
+		for s, st in pairs(stances) do
+			if st == n then
+				res = s 
+				break
+			end
+		end
+		return res
+	end
 	local MotionVector = VEC2(0,0)
 	CharState.getStanceIndex = function(self,stance)
 		return stances[stance]
@@ -213,7 +229,12 @@ do
 	CharState.getProneSpeed = function(self,baseWalkSpeed)
 		return MH:GetStanceSpeed(2)
 	end
-
+	CharState.getRegStanceCF = function(self,part,stance)
+		return ClientSettings.StanceCF[part][typeof(stance) == "number" and getStance(stance) or stance]
+	end
+	CharState.getLegStanceCF = function(self,cfType,stance,side)
+		return ClientSettings.StanceCF.leg[cfType][typeof(stance) == "number" and getStance(stance) or stance][side]
+	end	
 	CharState.changeStance = function(self,stance,lean,silent)
 		local tween = Resources:GetComponent("Tweener")
 		local pssW = stanceSway
@@ -401,8 +422,12 @@ do
 	CharState = setmetatable(CharState, {
 		__index = function(self,k)
 			local key = k:lower()
-			if key == "stance" then
+			if key == "crawlcamrot" then
+				return crawlCamRot;
+			elseif key == "stance" then
 				return Stance
+			elseif key == "crawlalpha" then
+				return crawlAlpha
 			elseif key == "currentstate" then
 				return currentState
 			elseif key == "stanceblacklist" then
@@ -411,16 +436,20 @@ do
 				return stanceTrans
 			elseif key == "lean" then
 				return Lean
+			elseif key == "moveenabled" then
+				return MotionVector
 			elseif key == "motionvector" then
 				return MotionVector
-			elseif key == "moveenabled" then
-				return isMoveEnabled
 			elseif key == "movedirection" then
 				return Humanoid.MoveDirection
 			elseif key == "lastpos" then
 				return lastPos
 			elseif key == "pdist" then
 				return pDist
+			elseif key == "crawlang" then
+				return crawlAng
+			elseif key == "moveang" then
+				return moveAng
 			elseif key == "runningtrans" then
 				return RunningTrans
 			elseif key == "runtransition" then
@@ -443,6 +472,8 @@ do
 				bWS = v;
 			elseif key == "motionvector" then
 				MotionVector = v
+			elseif key == "moveang" then
+				moveAng = v
 			elseif key == "stance" then
 				Stance = v 
 			elseif key == "grounded" then
@@ -452,6 +483,8 @@ do
 				if CurrentItem.Value then
 					CharState:chooseWalkAnim()
 				end
+			elseif key == "crawlalpha" then
+				crawlAlpha = v
 			elseif key == "runtransition" then
 				RunTransition = v
 			elseif key == "lastpos" then
@@ -468,6 +501,8 @@ do
 				Lean = v
 			elseif key == "leananim" then
 				return leanAnim
+			elseif key == "crawlang" then
+				crawlAng = v
 			elseif key == "aimangle" then
 				aimAngle = v
 			end
@@ -503,6 +538,7 @@ do
 	local ammoInClip = 0;
 	local Type = nil;
 	local poses = {};
+	local deployedBipod = false;
 	local AttachmentMods = Resources:LoadConfiguration("AttachmentModules")
 	local animCancel = PseudoInstance.new("AnimPlaybackController",ClientSettings.Anims.CancelCache,ClientSettings.Anims.NonCancellable)
 	local function getAnimAPI()
@@ -888,6 +924,9 @@ do
 			if err then
 				print(err)
 			end
+		end;
+		IsBipodDeployed = function(self)
+			return deployedBipod
 		end;
 		PrepareItem = function(self)
 			--[[
@@ -1348,6 +1387,166 @@ local soundUpdate do
 		SoundBox2:UpdateAll(worldDt)
 	end
 end
+
+do
+	local tween = Resources:GetComponent("Tweener")
+
+	CharState.crawlAng = 0
+	local MotionTransition = false
+	local moveReady = false
+	local moveMode = nil;
+	local ti_m = 0; -- Movement Total Time; Resets when time reaches 0.3.
+	local rate = 0.15; -- Movement tween rate; used for determining the speed at which crawling goes;
+	local function moveStop(standing)
+		task.spawn(function()
+			CharState.crawlAng  = 0
+			task.spawn(function()
+				local startCamRot = CharState.crawlCamRot
+				Tween.new(0.3, getAlpha("Smoother"), "CrawlStop", false, function(x)
+					CharState.crawlCamRot = Lerps.number(startCamRot, 0, x)
+				end)
+			end)
+			if not standing then
+				tween("Joint",CharacterJoints.Hips.Right,false,ClientSettings.StanceCF.leg.C1.Prone[2],getAlpha("Smoother"),0.3)
+				tween("Joint",CharacterJoints.Hips.Left,false,ClientSettings.StanceCF.leg.C1.Prone[1],getAlpha("Smoother"),0.3)
+			else
+				tween("Joint",CharacterJoints.Hips.Right,false,CharState:getLegStanceCF("C1",CharState.Stance,2),getAlpha("Smoother"),0.3)
+				tween("Joint",CharacterJoints.Hips.Left,false,CharState:getLegStanceCF("C1",CharState.Stance,1),getAlpha("Smoother"),0.3)
+			end
+			local basePos = WeaponUtils:GetBasePose(CurrentItem.Value)
+			tween("Joint",ViewModel.LWeld, false, CurrentItem:getArmPos(basePos,"Left"), getAlpha("Smoother"), 0.3)
+			tween("Joint",ViewModel.RWeld, false, CurrentItem:getArmPos(basePos,"Right"), getAlpha("Smoother"), 0.3)
+			tween("Joint",ViewModel.Grips.Right, false, CurrentItem:getArmPos(basePos,"Grip"), getAlpha("Smoother"), 0.3)					
+			FastWait(0.3)
+		end)
+	end
+	local movementActions = require(script.ExtraMovement)
+	local function getAPI()
+		return {
+			CurrentItem = CurrentItem;
+			ViewModel = ViewModel;
+			CharState = CharState;
+			Tween = Tween;
+			tween = tween;
+			CharacterParts = CharacterParts;
+			CharacterJoints = CharacterJoints;
+			stanceCF = ClientSettings.StanceCF;
+			getAlpha = getAlpha;
+			Lerps = Lerps;
+			FastWait = FastWait;
+			Character = Character;
+			Water = Water;
+		}
+	end
+	local function movementReady(move)
+		if (not Character) or (not Character.Parent) or  (Humanoid.Health <= 0) then
+			moveMode = nil;
+			return
+		end
+		if movementActions[move] then
+			if movementActions[move].Start then
+				movementActions[move].Start(getAPI(), CurrentItem:IsBipodDeployed())
+				moveMode = move;
+			else
+				moveMode = nil
+			end
+		else
+			moveMode = nil;
+		end
+		moveReady = (moveMode ~= nil)
+	end
+	Jan_Char:Add(RunService.Heartbeat:Connect(function(dt)
+		if (not Character) or (not Character.Parent) or  (Humanoid.Health <= 0) then
+			return
+		end
+		local stateTranition = true
+		for k, act in pairs(movementActions) do
+			stateTranition = stateTranition and (not act.Active(CurrentItem, CharState, Character))
+		end
+		if (not moveReady)   then
+			for k, act in pairs(movementActions) do
+				if act.InCondition(CurrentItem, CharState, MotionTransition, Character, Water) then
+					MotionTransition = true
+					if CurrentItem:IsPlayingAnim() then
+						if act.CanCancelAnim then
+							if act.CanCancelAnim() then
+								CurrentItem:CancelCurrentAnim()
+							end
+						else
+							CurrentItem:CancelCurrentAnim()
+						end
+
+
+					end
+					if CurrentItem.Aimed then CurrentItem:unAimGun() end
+					movementReady(act.Name)
+					_G.UP_RATE = 0.065
+					MotionTransition = false
+					break
+				end
+			end
+		elseif stateTranition then
+			for k, act in pairs(movementActions) do
+				if moveMode == act.Name and act.OutCondition(CurrentItem, CharState, MotionTransition, Character, Water) then
+					movementReady(nil)
+					FastWait(rate)
+					if not act.End then
+						moveStop(true)
+					else
+						act.End(getAPI())
+					end
+					if CharState.MoveDirection.Magnitude ~= 0 then
+						if CharState.Stance == 1 then
+							CharState.currentState = "CWalking"
+						else
+							CharState.currentState = "Running"
+						end
+					end
+					_G.UP_RATE = 0.1
+					return
+				end
+			end
+			if CharState.Stance == 2 and (not CurrentItem.Aimed) and (not  CurrentItem:IsPlayingAnim()) then
+				movementReady(nil)
+				if  CharState.currentState ~= "ProneIdle" then
+					FastWait(rate)
+					moveStop()
+					CharState.currentState = "ProneIdle"
+				end
+			end	
+		end
+		if (not Character) or (not Character.Parent) or  (Humanoid.Health <= 0) then
+			return
+		end
+		if not moveReady then
+			return
+		end
+		rate = dt* 10.5;
+		ti_m += dt;
+		if ti_m >= (movementActions[moveMode].Rate or 0.3) then
+			ti_m = 0;
+		end
+		movementActions[moveMode].Run(
+			{
+				CurrentItem = CurrentItem;
+				CharState = CharState;
+				ViewModel = ViewModel;
+				CharacterParts = CharacterParts;
+				CharacterJoints = CharacterJoints;
+				stanceCF = ClientSettings.StanceCF;
+				getAlpha = getAlpha;
+				tween = tween;
+				Character = Character;
+
+			},
+			ti_m,
+			dt,
+			CurrentItem:IsBipodDeployed()
+		)	
+	end),"Disconnect","CrawlAnimChar1")
+
+end
+
 do
 	local sequences = {};
 	sequences.General = {};
@@ -1376,6 +1575,10 @@ do
 	RenderEngine:AddCameraRender(function(dt)
 		local camOff = Vector2.new(0,0)
 		CameraService.CurrentCamMode.cameraPerspective = _G.CameraAng + camOff
+		if CurrentItem.Value and CurrentItem.Animations then
+			local Increment = 90 * 2.5 --1.5 / 0.4
+			CharState.crawlAlpha = MIN(MAX(CharState.crawlAlpha + ((CharState.currentState == "Crawling") and Increment or -Increment) * dt, 0), 90)
+		end
 		local mm
 		if CharState.currentState == "Crawling" and (not CharacterParts.HRP.Anchored) then
 			mm = "Crawl";
@@ -1766,7 +1969,6 @@ RemoteService.listen("Client","Send","SetupBolts",function(bW,item)
 end)
 -------
 do
-	local Char_Jan = Janitor.new()
 	local tween = Resources:GetComponent("Tweener")
 	player.CharacterAdded:Connect(function(ch)
 		Character = ch
@@ -2097,6 +2299,10 @@ local function UpdateKeys()
 		end
 		InputComp.CharacterController:SetInput(k,v)
 	end
+	InputComp.CharacterController.Callback = function(angle)
+		local startAng = (ABS(CharState.moveAng) == RAD(180)) and (angle > 0 and RAD(180) or RAD(-180)) or CharState.moveAng
+		CharState.moveAng = angle				
+	end	
 end
 do
 	InputComp.SetupCharacter()
