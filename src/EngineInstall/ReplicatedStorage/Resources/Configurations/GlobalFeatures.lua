@@ -22,4 +22,6 @@ return {
     -- Use default sprint state (cosmetic)?
 	-- NOTE: if you make your own keybind system (synced with the InputComponent), change this to false.
 	SprintDefaults = true;
+    -- Hats/Helmets fling off (for everyone)
+    HatFling = false;
 }

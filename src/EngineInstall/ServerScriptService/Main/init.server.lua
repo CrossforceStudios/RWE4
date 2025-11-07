@@ -347,6 +347,82 @@ function runInit(plr: Player)
 end
 EventSystem:ConnectEvent("PlayerAdded", runInit)
 -----
+local Fire_S = {}
+Fire_S.ProcessFire = function(H,dmg,hum,plr)
+	local Damage = Resources:GetComponent("Damage")
+	Damage:Fire(H,dmg,hum,plr)
+end
+do
+	local function LaunchGrenade(player,w,opts)
+		local WC = Resources:GetComponent("WeaponActivator")
+		WC:launch("Grenade",{
+			player = player;
+			weapon = w;
+			chargeAddend = opts.chargeAddend;
+			time = opts.time;
+			lookPoint = opts.lookPoint
+		})
+	end
+
+	local function fireWeapon(player,mode,bCFrame,Vars,w)
+		local weapon = (typeof(player) == "Instance" and not w) and PlayerLoadouts[player].CurrentWeapon or w
+		if Vars.cannon then
+			if Vars.cannon:FindFirstAncestor("Vehicles") then
+				weapon = Vars.cannon
+			end
+		end
+		if not weapon then
+			return false
+		end
+		if not weapon:FindFirstChild("SETTINGS") then
+			return false
+		end
+
+		local SE = require(weapon.SETTINGS)
+		local mag , cart 
+		if not Vars.Grenade then
+			if WeaponUtils:HasEnoughAmmo((typeof(player) == "Instance") and player or player.Character, weapon) then
+				weapon:SetAttribute("Ammo", weapon:GetAttribute("Ammo") - 1)
+				weapon:SetAttribute("Fresh",false)
+				mag = MagazinesList[weapon:GetAttribute("MagType")]
+				cart = Cartridges[mag.CartridgeName]
+				if weapon:GetAttribute("GaugeIndex") then
+					cart:SetupGauge(weapon:GetAttribute("GaugeIndex"))
+				end
+
+			else
+				return false
+			end
+		else
+			if weapon:GetAttribute("Grenades") > 0 or weapon:GetAttribute("GrenadesReady") then
+				weapon:SetAttribute("GrenadesReady",false)
+				cart = Cartridges[weapon:GetAttribute("CurrentGrenade")]
+			else
+				return false
+			end				
+		end
+		if cart then
+			local WC = Resources:GetComponent("WeaponActivator")
+			for i = 1, cart.ShotAmount do 
+				WC:launch("Projectile",{
+					player = (typeof(player) == "Instance") and player or player.Character;
+					mode = mode;
+					projectMode = "WeaponPlayer";
+					bCFrame = bCFrame;
+					Vars = Vars;
+					weapon = weapon;
+					cart = cart;
+					shotAmount = cart.ShotAmount;
+				})
+			end
+			if weapon:GetAttribute("AmmoInd") then weapon:SetAttribute("AmmoInd",weapon:GetAttribute("AmmoInd") - 1) end
+		end
+	end
+	RemoteService.listen("Server","Send","FireWeapon",function(player,mode,cf,vars)
+		fireWeapon(player,mode,cf,vars)
+	end)
+end
+-----
 RemoteService.listen("Server","Send","SetJointC0",function(player,Joint,JC0,set)
 	pcall(function() if Joint then 	if  Joint.Part0 then  if (Joint.Part0:GetNetworkOwner() == player or table.find(jointIgnore,Joint.Name)) then	   Joint.C0 = JC0  end end end end)
 end)

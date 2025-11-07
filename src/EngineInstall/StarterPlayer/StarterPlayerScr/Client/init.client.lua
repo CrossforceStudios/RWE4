@@ -86,6 +86,7 @@ local Signal = Resources:LoadLibrary("Signal")
 local EasingFunction = Resources:LoadLibrary("EasingFunctions")
 local MH = Resources:LoadLibrary("MovementHelper")
 local Water = Resources:LoadLibrary("Water")
+local FastCast = Resources:LoadLibrary("FastCast")
 
 -- Necessary configs
 local Magazines = Resources:LoadConfiguration("Magazine")
@@ -1376,6 +1377,309 @@ InputComp.AddLoadoutScheme("LoadoutMobile",
 		end
 	end
 end)
+------
+local isDead = false
+local BManager = {}	
+
+do
+	BManager.Caster = FastCast.new()
+	--mCaster = MissileCaster.new()
+	local WhizSoundIDs = script.Whiz:GetChildren()
+	local r = 25
+	local cDist = {};
+	local ED = Resources:LoadConfiguration("ExplosiveData")
+	local Pene = Resources:LoadLibrary("cartridgePenetration")
+	BManager.Caster.PointPassed:Connect(function(cast, resultOfCast, cfPoint, cosmeticBulletObject, rayDir, list)
+		local CFP, LI, B = cfPoint, list, cosmeticBulletObject
+		if features("getFeature","Whizzing") then
+			if player and (not table.find(LI,player.Character)) and player.Character and player.Character.Parent and CharacterParts.Head then
+				if CharacterParts.Head then
+					if B and (CFP.p - CharacterParts.Head.Position).magnitude <=  r + (CharacterParts.Head.Size.magnitude/20)  then
+						if game.CollectionService:HasTag(B,player.Name) then
+							return
+						end
+						if Humanoid.Health <= 0 then
+							return
+						end
+						if Humanoid:GetAttribute("Unconscious") then
+							return
+						end
+						print("Whiz")
+						local Sound = WhizSoundIDs[math.random(1, #WhizSoundIDs)]
+						Sound.SoundGroup = SoundSys:GetSoundCat("Game_FX")
+						CameraService:ShakeVibration(V3(), Vector3.new(1, 0, 4))
+
+						SoundSys:Create(Sound, cfPoint, false,{
+
+						}, false)
+
+
+					end
+				end
+			end
+		end
+	end)
+	--[[mCaster.LengthChanged:Connect(function(cast, lastPoint, rayDir, rayDisplacement, segmentVelocity, cosmeticBulletObject)
+		local ML = cosmeticBulletObject.Size.Z / 2
+		local target  = cast.StateInfo.Target 
+		local rot = {target.CFrame:ToEulerAnglesXYZ()}
+		local cf = CFrame.new(lastPoint, lastPoint + rayDir) * CFrame.new(0,0,-(rayDisplacement - ML))
+		local rot2 = {cosmeticBulletObject.CFrame:ToEulerAnglesXYZ()};
+		local velocity = cast:GetVelocity() 
+		local diff = target.Velocity - velocity
+		local cfAng = CFrame.new(lastPoint, lastPoint + (target.CFrame.Position - lastPoint).Unit * rayDir.Magnitude)
+		local cfAng2 = cfAng - cfAng.Position
+		cosmeticBulletObject.CFrame =  CFrame.new(cfAng.Position) * cfAng2:Lerp(CFrame.new(cfAng.Position), 0.5  - ((.125 * math.clamp(cast.StateInfo.TargetFactor, 1, 4)) - .01) ) * CFrame.new(0,0,-(rayDisplacement - ML))
+		cast:SetVelocity(cosmeticBulletObject.CFrame.LookVector.Unit * cast.RayInfo.MaxDistance/30)
+
+	end)
+	mCaster.CastTerminating:Connect(function(cast)
+		cast.RayInfo.CosmeticBulletObject:Destroy()	
+	end)]]--
+	BManager.Caster.LengthChanged:Connect(function(cast, lastPoint, rayDir, rayDisplacement, segmentVelocity, cosmeticBulletObject, ID)
+		local B, OP, D, L = cosmeticBulletObject, lastPoint, rayDir, rayDisplacement
+		if typeof(B) == "Instance" and B.Parent then
+			local BL = B:GetExtentsSize().Z / 2	
+			local newCF = CF.RAW(OP,OP + D) * CF.RAW(0,0,-(L - BL)) * CF.ANG(0,0,RAD(45))
+			if B:FindFirstChild("Tracer",true) and B.PrimaryPart.Tracer:IsA("LineHandleAdornment") then
+				B:FindFirstChild("Tracer",true).Length = -(L - BL) 
+			end
+			B:SetPrimaryPartCFrame(newCF)
+		end
+	end)
+	BManager.Caster.CastTerminating:Connect(function(cast)
+		local B = BManager.BulletCache[cast.UserData.ID];
+		BManager.BulletCache[cast.UserData.ID] = nil;		
+		game.CollectionService:RemoveTag(B,cast.UserData.ID)
+		B:Destroy()
+		cDist[B] = nil 
+		B = nil;
+	end)	
+	BManager.BulletCache = {}
+	local sTrail = OBJ('LineHandleAdornment')
+	sTrail.Name = "Tracer"
+	sTrail.Transparency = 0
+	sTrail.Thickness = 10
+	sTrail.AlwaysOnTop = true
+	sTrail.Visible  = false
+	local function createBulletData(bullet,cartridge,dir,vel,ign,grav,ID,accel,bulletLoc)
+		local bulletCF = bullet:GetModelCFrame()
+		if bullet:FindFirstChild("Wing1") then
+			for _, v in ipairs(bullet:GetChildren()) do
+				local hr = v.Name:match("WingEffector(%d+)")
+				if hr then
+					Tween(v:FindFirstChild("WingHingeMotor"..hr),"C1",CF.ANG(RAD(-90),0,0),getAlpha("Deceleration"),0.3,false)
+				end
+			end
+		end
+		if cartridge.IsMag then
+			cDist[bullet] = cartridge.Range/100
+		end
+		local params = RaycastParams.new()
+		params.FilterDescendantsInstances = ign
+		params.FilterType = Enum.RaycastFilterType.Blacklist
+		params.IgnoreWater = false
+		local dat = FastCast.newBehavior()
+		for k, v in pairs({
+			CosmeticBulletTemplate = bullet;
+			RaycastParams = params;
+			CanPierceFunction = (not ED[cartridge.Name]) and Pene(cartridge,{
+				h = bullet.Name:find("Hollow");
+				e = bullet:FindFirstChild("AmmoEffect",true);
+			}) or nil;
+			Acceleration = accel or V3(0,grav,0);
+			AutoIgnoreContainer = true;
+			MaxDistance = cartridge.Range;
+			}) do
+			dat[k] = v
+		end
+		BManager.Caster:Fire( bulletLoc and bulletLoc.p or bulletCF.p, bulletLoc and bulletLoc.LookVector or bulletCF.LookVector, vel, dat, ID)
+	end
+	local Joint = Resources:LoadLibrary("Joint")
+
+
+
+	RemoteService.listen("Client","Bounce","MakeBullet",function(bM,cartName,Vars,owner)
+		local Cartridge = Cartridges[cartName]
+		if Vars.Gauge then
+			Cartridge:SetupGauge(Vars.Gauge)
+		end
+		if Vars.BulletSettings then
+			Cartridge:SetupBarrel(Vars.BulletSettings, Vars.Weapon)
+		end
+		local Bullet = Cartridge:getBullet(Vars)
+
+		Bullet.PrimaryPart = Bullet:FindFirstChild("SpitzerMain");
+		for _, c in ipairs(Bullet:GetChildren()) do
+			if c:IsA("BasePart") then
+				c.CanCollide = false
+				c.CollisionGroup = "Player"
+			end
+		end
+
+
+		if Cartridge.IsMag and (not Vars.partial) then
+
+			local magModel = WeaponUtils:PerformAsyncServerAction(player, Vars.Weapon, "CreateMagazine", Vars.Mag)
+			magModel.Name = "BulletMag"
+			magModel.Point.CFrame = Bullet:GetPrimaryPartCFrame() * (Vars.magRotation or CF.RAW())
+			local W = Instance.new("Motor6D")
+			W.Part0 = Bullet.PrimaryPart
+			W.Part1 = magModel.Point
+			W.C0 = Bullet:GetPrimaryPartCFrame():toObjectSpace(magModel.Point.CFrame)
+			W.Parent = Bullet
+
+			magModel.Parent = Bullet
+			magModel = nil;
+			if Vars.Main then
+				if Vars.Main:FindFirstChild("AmmoEffect") and (not Cartridges.Shells[cartName]) then
+					for _, effect in ipairs(Vars.Main:FindFirstChild("AmmoEffect"):GetChildren()) do
+						local e2 = effect:Clone()
+						e2.EmissionDirection = Enum.NormalId.Back
+						e2.Parent = Bullet.PrimaryPart
+						e2.Enabled = true
+						local ed = Instance.new("NumberValue")
+						ed.Name = "EmissionDistance"
+						ed.Value = 0
+						ed.Parent =  Bullet.PrimaryPart
+						ed = nil;
+						e2 = nil
+					end
+				end
+			end
+		elseif Vars.partial then
+			if Bullet:FindFirstChild("Wing1") then
+				for _, part in ipairs(Bullet:GetChildren()) do
+					if part.Name:find("WingHinge") then
+						local n = part.Name:match("WingHinge(%d+)")
+						if n then
+							local w = Joint("Assemble",Bullet:FindFirstChild("WingEffector"..n),part,CF.RAW(),"WingHingeMotor"..n)
+							part.Anchored = false
+						end
+					elseif part.Name:find("Wing") then
+						local n = part.Name:match("Wing(%d+)")
+						if n then
+							local w = Joint("Assemble",Bullet:FindFirstChild("WingHinge"..n),part,CF.RAW(),"WingHingeAttachment"..n)
+							part.Anchored = false
+						end
+					end			
+				end
+			end
+			if Vars.Main then
+				if Vars.Main:FindFirstChild("AmmoEffect") then
+					for _, effect in ipairs(Vars.Main:FindFirstChild("AmmoEffect"):GetChildren()) do
+						local e2 = effect:Clone()
+						e2.EmissionDirection = Enum.NormalId.Back
+						e2.Parent = Bullet.PrimaryPart
+						e2.Enabled = true
+						local ed = Instance.new("NumberValue")
+						ed.Name = "EmissionDistance"
+						ed.Value = 0
+						ed.Parent =  Bullet.PrimaryPart
+						ed = nil;
+						e2 = nil
+					end
+				end	
+			end	
+		end
+		if Vars.ID then
+			game.CollectionService:AddTag(Bullet,Vars.ID)
+			if Vars.plr then
+				game.CollectionService:AddTag(Bullet,Vars.plr.Name)
+			end
+			BManager:addBullet(Bullet,Vars.ID)
+
+		end
+		if (not Cartridge.IsMag) and (not Vars.RenderRocketParticles) then
+
+
+			local sTrail2 = sTrail:Clone()
+			sTrail2.Parent = Bullet.PrimaryPart
+			Bullet.PrimaryPart.Tracer.Color = Cartridge.Color
+
+			Bullet.PrimaryPart.Tracer.Adornee = Bullet.PrimaryPart
+			sTrail2 = nil;				
+		end
+		if Cartridges.Shells[cartName] then
+			local att1, att2 = Make("Attachment"){
+				CFrame = CFrame.new(0,0,-Bullet.PrimaryPart.Size.Magnitude * 20)				
+
+			},Make("Attachment"){ 
+				CFrame = CFrame.new(0,0,-Bullet.PrimaryPart.Size.Magnitude * 10)				
+
+
+			};
+			att1.Parent = Bullet.PrimaryPart
+			att2.Parent = att1.Parent
+			local beam = Instance.new("Beam")
+			beam.LightEmission = 1;
+			beam.LightInfluence = 0;
+			beam.Transparency = NumberSequence.new(0)
+			beam.Texture = "rbxassetid://1928877338"
+			beam.TextureLength = 1
+			beam.TextureMode = "Stretch"
+			beam.Name = "Tracer"
+			beam.TextureSpeed = 0
+			beam.Attachment0 = att1
+			beam.Attachment1 = att2
+			beam.FaceCamera = true
+			beam.Segments = 1
+			beam.Width0 = RNG:NextInteger(-ABS(Bullet.PrimaryPart.Size.X),ABS(Bullet.PrimaryPart.Size.X))
+			beam.Width1 = beam.Width0
+			beam.Parent = Bullet.PrimaryPart
+		end
+		Bullet.Parent = workspace.BulletStorage
+		Bullet:SetPrimaryPartCFrame((bM) + (bM.lookVector * (Bullet.PrimaryPart.Size.Z / 2)))
+		if (not Cartridge.IsMag) and (not Vars.RenderRocketParticles) then 
+			Bullet.PrimaryPart.Tracer.Visible = true
+			Bullet.PrimaryPart.Tracer.SizeRelativeOffset = V3(-0.1,0,0)
+		end
+		if Vars.RenderRocketParticles then
+			for _, v in ipairs(Bullet:GetDescendants()) do
+				if v:IsA("ParticleEmitter") then
+					v.Enabled = true
+					v.Rate = 1500
+				end
+			end
+			local fire = Resources:GetEffect("RocketFire"):Clone()
+			fire.Parent = Bullet.PrimaryPart.SmokeFX
+			fire.Enabled = true
+			fire.Rate = 1500
+		end
+		createBulletData(Bullet, Cartridge,Vars.Direction,Vars.Velocity,Vars.Ignore,Vars.Gravity,Vars.ID,Vars.Accel,bM)
+		Bullet:AddTag(owner.Name)
+		Bullet = nil;
+	end)
+
+	function BManager:addBullet(bullet,id)
+		if bullet then
+			BManager.BulletCache[id] = bullet
+		end
+	end
+
+	RemoteService.listen("Client","Bounce","MakeMissile",function(cartName,args,player2,missile)
+		local rp = RaycastParams.new()
+		rp.FilterType = Enum.RaycastFilterType.Exclude
+		rp.FilterDescendantsInstances = args.Ignore
+		rp:AddToFilter(currentHelo)
+		for _, v in ipairs(missile.PrimaryPart.FX:GetChildren()) do
+			v.Enabled = true
+		end
+		mCaster:Fire(missile.PrimaryPart.CFrame.p, missile.PrimaryPart.CFrame.LookVector, 200, args.Lock, {
+			RaycastParams = rp,
+			Acceleration = Vector3.new(),
+			MaxDistance = 10000,
+			CanPierceFunction = nil,
+			HighFidelityBehavior = MissileCaster.HighFidelityBehavior.Default,
+			HighFidelitySegmentSize = 0.5,
+			CosmeticBulletTemplate = missile.PrimaryPart,
+			CosmeticBulletProvider = nil,
+			CosmeticBulletContainer = workspace.RocketIgnore,
+			AutoIgnoreContainer = true,
+			TargetFactor = 4
+		})
+	end)
+end
 ------
 CameraService:startClient()
 RemoteService.startClient()
