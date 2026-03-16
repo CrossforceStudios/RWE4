@@ -34,6 +34,7 @@ local Cartridges =  Resources:LoadConfiguration("Cartridge")
 local AttachmentModules = Resources:LoadConfiguration("AttachmentModules")
 local MagazinesList = Resources:LoadConfiguration("Magazine")
 local LoadoutConfig = Resources:LoadConfiguration("LoadoutConfig")
+local ExplosiveData = Resources:LoadConfiguration("ExplosiveData")
 
 -- Event System + Server Plugins 
 local ServerSettings = require(script.Parent.ServerSettings)
@@ -61,6 +62,7 @@ local armC0 = {
 	CFrame.new(1.5, 0, 0) * CFrame.Angles(math.rad(90), 0, 0);
 }
 -- Other values
+local RNG = Random.new()
 local Grips = {};
 local gunIgnores = {};
 local animWelds = {};
@@ -421,6 +423,66 @@ do
 	RemoteService.listen("Server","Send","FireWeapon",function(player,mode,cf,vars)
 		fireWeapon(player,mode,cf,vars)
 	end)
+	RemoteService.listen("Server","Send","MuzzleFlashServer",function(player,main,cf,options)
+		local spp,set,tank,fr =  options.Suppressed,  options.fireSoundSettings, options.Tank, options.fireRate
+		RemoteService.bounceU("Client","MuzzleFlash",main,cf,options)
+		local weapon = if tank then nil else main.Parent
+		if weapon and (not tank) then
+			if weapon.Type.Value == "Gun" then
+				local S = require(weapon.SETTINGS)
+				local done = false
+				if S.reloadSettings.cycleRounds then
+					if not table.find(S.reloadSettings.cycleRounds, weapon:GetAttribute("MagType")) then
+						local ObjectV = Instance.new("ObjectValue")
+						ObjectV.Value = weapon
+						ObjectV.Parent = workspace.ShellIgnore
+						FastDelay(0.6, function()
+							ObjectV:Destroy()
+							local magRounds = weapon:FindFirstChild("Rounds", true)
+							if magRounds then
+								local bullet = magRounds:FindFirstChild("BP" .. (weapon:GetAttribute("Ammo")))
+								if bullet then
+									bullet:Destroy()
+									bullet = nil
+								end
+							end
+						end)
+					end
+					done = true
+				elseif (not S.bulletSettings.noShell) and  (not done) then
+					local ObjectV = Instance.new("ObjectValue")
+					ObjectV.Value = weapon
+					ObjectV.Parent = workspace.ShellIgnore
+					FastDelay(0.6, function()
+						ObjectV:Destroy()
+						local magRounds = weapon:FindFirstChild("Rounds", true)
+						if magRounds then
+							local bullet = magRounds:FindFirstChild("BP" .. (weapon:GetAttribute("Ammo")))
+							if bullet then
+								bullet:Destroy()
+								bullet = nil
+							end
+						end
+					end)
+				end
+
+
+			end
+		elseif (tank) then
+			if main:FindFirstChild("RecoilForce") then
+				main.RecoilForce.Enabled = true
+				task.delay(.1, function()
+					main.RecoilForce.Enabled = false
+				end)
+			end
+		end
+
+		--[[for _, m in ipairs(_G.Mobs) do
+			if m then
+				m:Hear(player,cf.p)
+			end
+		end]]--
+	end)
 end
 -----
 RemoteService.listen("Server","Send","SetJointC0",function(player,Joint,JC0,set)
@@ -560,7 +622,16 @@ task.spawn(function()
 				Math = {
 					Round = MathRound;
 				};
+				gunIgnores = gunIgnores;
 				Enumeration = Enumeration;
+				PlayerLoadouts = function()
+					return PlayerLoadouts
+				end,
+				MagazinesList = MagazinesList;
+				RNG = RNG;
+				V3 = Vector3.new;
+				WeaponUtils = WeaponUtils;
+				ExplosiveData = ExplosiveData
 			}, Resources:GetLocalTable("Components"))
 		end
 	end

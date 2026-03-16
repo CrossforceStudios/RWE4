@@ -44,6 +44,13 @@ local ClientSettings = {
 			
 		end,
 	};
+	Weapon = {
+		ContinuousActions =  {
+			"Gas";
+			"SemiAuto";
+			"Double";
+		};
+	};
 	-- Replace the run, climb, idle and walk anims with your own.
 	HumanoidAnimIds = {
 		Zombie = {
@@ -317,8 +324,57 @@ local ClientSettings = {
 		[Enum.PlayerActions.CharacterLeft] = Enum.KeyCode.A;
 		[Enum.PlayerActions.CharacterRight] = Enum.KeyCode.D;
 		[Enum.PlayerActions.CharacterJump] = {Enum.KeyCode.Space;Enum.KeyCode.ButtonA};
+	};
+	CamOffsets ={
+		["Gun"] = "gun";
+		["Launcher"] = "gun";
 	};	
+	CamSpringDefaults = {
+		0.45; -- Damping
+		35; -- Frequency
+	};
+
 }
 
 ClientSettings.AnimAPI = require(script.AnimAPI)
+ClientSettings.getTotalCamOffset = function(props)
+	local CameraStateObj, CharStateObj, CurrentItemObj = props.CameraState, props.CharState, props.CurrentItem
+	local Lerps = props.Lerps
+	local getTotalCamOffset = {
+		grenade = function(dt)
+			return Vector3.new(), Vector3.new()
+		end;
+		gun = function(dt)
+			local CameraState = CameraStateObj()
+			local CharState = CharStateObj()
+			local pc = workspace.CurrentCamera.CFrame
+			local dir = Lerps.number(CharState.BaseAnim.Rot.p.Z, 0, 0.25)
+			return CameraState.camOffsets.guiScope.Rot +  CameraState.camOffsets.Reload.Rot + CameraState.camRecoilSpring.p + Vector3.new(0, 0, (7.5*dt) * dir), Vector3.new()
+		end;
+		ammoBox = function(dt)
+			return Vector3.new(), Vector3.new()
+		end;
+		binoculars = function(dt)
+			local CurrentItem = CurrentItemObj()
+			local FOVAmount = workspace.CurrentCamera.FieldOfView
+			return Vector3.new(0,0,0), CurrentItem.Aimed and  Vector3.new(0,0,-(80 - FOVAmount) * 15) or Vector3.new()
+		end;
+		medicine = function(dt)
+			return Vector3.new(), Vector3.new()
+		end;
+		lampetmine = function(dt)
+			return Vector3.new(), Vector3.new()
+		end;
+		melee = function(dt)
+			local CameraState = CameraStateObj()
+			return CameraState.camOffsets.guiScope.Rot +  CameraState.camOffsets.Reload.Rot + CameraState.camRecoilSpring.p, Vector3.new()
+		end;
+		crate = function(dt)
+			return Vector3.new(), Vector3.new()
+		end;
+
+	}
+	return getTotalCamOffset
+end
+
 return ClientSettings

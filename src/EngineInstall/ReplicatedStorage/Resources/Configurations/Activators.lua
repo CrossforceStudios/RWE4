@@ -183,29 +183,32 @@ local triggers = {
 				args.CharVelocity = Character:FindFirstChildOfClass("Humanoid").MoveDirection
 			end
 			local RayParams = RaycastParams.new()
-			local map = workspace.CurrentMap.Value do
-				args.Ignore = args.Ignore or {}
+			args.Ignore = args.Ignore or {}
+			if workspace:FindFirstChild("CurrentMap") then
+				local map = workspace.CurrentMap.Value do
 
-				args.Ignore[#args.Ignore+1] = map.ReverbAreas
-				if Character then
-					args.Ignore[#args.Ignore+1] = Character;
-				end
-				args.Ignore[#args.Ignore+1] = map:FindFirstChild("LandmarkZones")
-				args.Ignore[#args.Ignore+1] = map:FindFirstChild("MapCenter")
-				args.Ignore[#args.Ignore+1] = map:FindFirstChild("MapCamera")
-				args.Ignore[#args.Ignore+1] = map:FindFirstChild("SandParts")
-				args.Ignore[#args.Ignore+1] = map:FindFirstChild("MapWaters")
-				local man = require(map.Manifest) do
-					if man.MapIgnore then
-						for _, ignoreObj in man.MapIgnore do
-							args[#args.Ignore+1] = ignoreObj;
+					args.Ignore[#args.Ignore+1] = map.ReverbAreas
+					if Character then
+						args.Ignore[#args.Ignore+1] = Character;
+					end
+					args.Ignore[#args.Ignore+1] = map:FindFirstChild("LandmarkZones")
+					args.Ignore[#args.Ignore+1] = map:FindFirstChild("MapCenter")
+					args.Ignore[#args.Ignore+1] = map:FindFirstChild("MapCamera")
+					args.Ignore[#args.Ignore+1] = map:FindFirstChild("SandParts")
+					args.Ignore[#args.Ignore+1] = map:FindFirstChild("MapWaters")
+					local man = require(map.Manifest) do
+						if man.MapIgnore then
+							for _, ignoreObj in man.MapIgnore do
+								args[#args.Ignore+1] = ignoreObj;
+							end
 						end
 					end
-				end
-				if args.Helo then
-					args.Ignore[#args.Ignore+1] = args.Helo
+					if args.Helo then
+						args.Ignore[#args.Ignore+1] = args.Helo
+					end
 				end
 			end
+
 			RayParams.IgnoreWater = false
 			RayParams.FilterDescendantsInstances = args.Ignore
 			RayParams.FilterType = Enum.RaycastFilterType.Exclude
@@ -336,14 +339,14 @@ local TriggerStates = {
 		end,
 		OnProcessHit = function(cast, resultOfCast, segmentVelocity, cosmeticBulletObject, ID, player, originalDirection)
 			local H,P,N,M,Bullet,Vel = resultOfCast.Instance, resultOfCast.Position, resultOfCast.Normal, resultOfCast.Material, cosmeticBulletObject, segmentVelocity
-			for _, mo in pairs(_G.Mobs) do
+--[[			for _, mo in pairs(_G.Mobs) do
 				if mo and getmetatable(mo) then
 					mo:AddSense("Sight","Bullet",{
 						P;
 						player:IsA("Player") and player.Character or player;
 					})
 				end
-			end
+			end]]--
 		end,
 	};
 	["ProjectileImpulse"] = {
@@ -388,24 +391,29 @@ local TriggerStates = {
 		OnProcessHit = function(cast, resultOfCast, segmentVelocity, cosmeticBulletObject, ID, player, originalDirection)
 			local H,P,N,M,Bullet,Vel = resultOfCast.Instance, resultOfCast.Position, resultOfCast.Normal, resultOfCast.Material, cosmeticBulletObject, segmentVelocity
 			if H.Parent then
-				if workspace.CurrentMap.Value:FindFirstChild("Lights") then
-					if H:IsDescendantOf(workspace.CurrentMap.Value:FindFirstChild("Lights"))  then
-						if H:FindFirstChildWhichIsA("Light") then
-							H:AddTag("DeadLight")
-						end
-					end	
+				if workspace:FindFirstChild("CurrentMap") then
+					if workspace.CurrentMap.Value:FindFirstChild("Lights") then
+						if H:IsDescendantOf(workspace.CurrentMap.Value:FindFirstChild("Lights"))  then
+							if H:FindFirstChildWhichIsA("Light") then
+								H:AddTag("DeadLight")
+							end
+						end	
+					end
 				end
 			end
 		end,
 		OnProcessPierce = function(cast, resultOfCast, segmentVelocity, cosmeticBulletObject, ID, player, originalDirection, activatorComp)
 			local H,P,N,M,Bullet,Vel = resultOfCast.Instance, resultOfCast.Position, resultOfCast.Normal, resultOfCast.Material, cosmeticBulletObject, segmentVelocity
 			if H.Parent then
-				if workspace.CurrentMap.Value:FindFirstChild("Lights") then
-					if H:IsDescendantOf(workspace.CurrentMap.Value:FindFirstChild("Lights"))  then
-						if H:FindFirstChildWhichIsA("Light") then
-							H:AddTag("DeadLight")
-						end
-					end	
+				if workspace:FindFirstChild("CurrentMap") then
+
+					if workspace.CurrentMap.Value:FindFirstChild("Lights") then
+						if H:IsDescendantOf(workspace.CurrentMap.Value:FindFirstChild("Lights"))  then
+							if H:FindFirstChildWhichIsA("Light") then
+								H:AddTag("DeadLight")
+							end
+						end	
+					end
 				end
 			end
 		end,
@@ -424,7 +432,7 @@ local TriggerStates = {
 			local Damage = Resources:GetComponent("Damage")
 			local H,P,N,M,Bullet,Vel = resultOfCast.Instance, resultOfCast.Position, resultOfCast.Normal, resultOfCast.Material, cosmeticBulletObject, segmentVelocity
 			if not originStub.cannon then
-				local helo = _G.heloSS.getHelo(H)
+				--local helo = _G.heloSS.getHelo(H)
 				if helo then
 					_G.heloSS.damage(H, originStub.dist, originStub.c.Damage.Min/10, originStub.plr)
 					return
@@ -498,7 +506,7 @@ local TriggerStates = {
 			else
 				local ldH = nil
 				local hitHumanoid 
-				local helo = _G.heloSS.getHelo(resultOfCast.Instance)
+				--local helo = _G.heloSS.getHelo(resultOfCast.Instance)
 
 				if originStub and not originStub.deb  then
 					originStub.deb = true;
@@ -549,14 +557,14 @@ local TriggerStates = {
 							end
 						end
 					end
-					
+
 					task.delay(0.75,function()
 						VehiclePierce[hitAncestry] = false
 					end)
 				end
 			end
 		end,
-		
+
 	}
 
 };

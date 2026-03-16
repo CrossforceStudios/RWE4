@@ -3,59 +3,92 @@ return function(API, InputComponent)
 	local RumblePreset
 	do
 
-	 
+
 
 	end
 	RumblePreset = API.PseudoInstance:Register("RumblePreset",{
 		Internals = {
-			
+			"Effect";
 		};
-		
+
 		Methods = {
-			Set = function(self,startVib)
-				API.HapticsService:SetMotor(self.Gamepad,self:getMotor(),startVib)
-			end;
-			Connect = function(self, f)
-				assert(API.Typer.Function(f), "[InputComponent 2]: f must be a function.")
-				self.IndexChanged:Connect(f)
-			end,
-			getMotor = function(self)
-				local result = self.Fallback
-				if API.HapticsService:IsVibrationSupported(self.Gamepad) then
-					if API.HapticsService:IsMotorSupported(self.Gamepad,self.Desired) then
-						result =  self.Desired
+			Customize = function(self, waveForms)
+				local effect : HapticEffect = self.Effect
+				if effect then
+					if effect:IsA("HapticEffect") then
+						if effect.Type == Enum.HapticEffectType.Custom then
+							effect:SetWaveformKeys(waveForms)
+						end
 					end
 				end
-				return result
+			end,
+			Play = function(self)
+				local effect : HapticEffect = self.Effect
+				if effect then
+					if effect:IsA("HapticEffect") then
+						effect:Play()
+					end
+				end
+			end,
+			Stop = function(self)
+				local effect : HapticEffect = self.Effect
+				if effect then
+					if effect:IsA("HapticEffect") then
+						effect:Stop()
+					end
+				end
+			end,
+			SetType = function(self, hapType)
+				local effect : HapticEffect = self.Effect
+				if effect then
+					if effect:IsA("HapticEffect") then
+						effect.Type = hapType
+					end
+				end
 			end,
 		};
-		
+
 		Events = {
-			
+
 		};
-		
+
 		Properties = {
-			Fallback = API.Typer.EnumOfTypeVibrationMotor;
-			Desired = API.Typer.EnumOfTypeVibrationMotor;
-			Gamepad = API.Typer.EnumOfTypeUserInputType;
+			Desired = API.Typer.Vector3;
 		};
-		
-		Init = function(self, label, gamepad, desired, fallback)
+
+		Init = function(self, label, gamepad, desired, typeOfEffect, parent)
 			self:superinit()
 			self.Name = label
-			self.Gamepad = gamepad or Enum.UserInputType.Gamepad1
 			self.Desired = desired
-			self.Fallback = fallback
+			self.Effect = Instance.new("HapticEffect") do
+				self.Effect.Name = "RumbleEffect"
+				self.Effect.Position = desired
+				self.Effect.Type = typeOfEffect or Enum.HapticEffectType.GameplayCollision
+				self.Effect.Parent = parent or game.Players.LocalPlayer
+				self.Janitor:Add(self:GetPropertyChangedSignal("Parent"):Connect(function()
+					self.Effect.Parent = self.Parent
+				end), "Disconnect")
+				self.Janitor:Add(self:GetPropertyChangedSignal("Desired"):Connect(function()
+					self.Effect.Position = self.Desired
+				end), "Disconnect")
+			end
 		end;
 	})
 	InputComponent.RumblePresets = {
-		["Recoil"] = API.PseudoInstance.new("RumblePreset","Recoil",Enum.UserInputType.Gamepad1,Enum.VibrationMotor.RightTrigger,Enum.VibrationMotor.Large);
-		["Recoil2"] = API.PseudoInstance.new("RumblePreset","Recoil2",Enum.UserInputType.Gamepad1,Enum.VibrationMotor.Large,Enum.VibrationMotor.Large);
-		["GripRecoil"] = API.PseudoInstance.new("RumblePreset","Recoil",Enum.UserInputType.Gamepad1,Enum.VibrationMotor.Large,Enum.VibrationMotor.Large);
+		["Recoil"] = API.PseudoInstance.new("RumblePreset","Recoil",Enum.UserInputType.Gamepad1,Vector3.new(0.5,0,0));
+		["Recoil2"] = API.PseudoInstance.new("RumblePreset","Recoil2",Enum.UserInputType.Gamepad1,Vector3.new(0,-0.5,0));
+		["GripRecoil"] = API.PseudoInstance.new("RumblePreset","GripRecoil",Enum.UserInputType.Gamepad1,Vector3.new(0,-0.5,0));
+		["Explosion"] = API.PseudoInstance.new("RumblePreset","Explosion",Enum.UserInputType.Gamepad1,Vector3.new(0,0,0),Enum.HapticEffectType.GameplayExplosion);
+
 	};
-	function InputComponent.SetRumble(name,start)
+	function InputComponent.PlayRumble(name)
 		if InputComponent.RumblePresets[name] then
-			InputComponent.RumblePresets[name]:Set(start)
+			InputComponent.RumblePresets[name]:Play()
+		end
+	end
+	function InputComponent.StopRumble(name)
+		if InputComponent.RumblePresets[name] then
+			InputComponent.RumblePresets[name]:Stop()
 		end
 	end
 	return {

@@ -87,12 +87,15 @@ local EasingFunction = Resources:LoadLibrary("EasingFunctions")
 local MH = Resources:LoadLibrary("MovementHelper")
 local Water = Resources:LoadLibrary("Water")
 local FastCast = Resources:LoadLibrary("FastCast")
+local RecoilClass = Resources:LoadLibrary("Recoil")
+local FSys = Resources:LoadLibrary("FiringSystem")
+local SoundSys = Resources:LoadLibrary("SoundSystem")
 
 -- Necessary configs
 local Magazines = Resources:LoadConfiguration("Magazine")
 local PostAnimHooks = Resources:LoadConfiguration("PostAnimHooks")
 local CharacterStateList = Resources:LoadConfiguration("CharacterStates")
-
+local Cartridges = Resources:LoadConfiguration("Cartridge")
 -- Shortcuts
 local VEC2 = Vector2.new
 local V3 = Vector3.new
@@ -108,6 +111,7 @@ _G.gunRecoilSpring = Spring.new(0.45,15,V3())
 local UP_RATE = 0.05
 local itemTransChange, BoltWelds
 local Jan_Char = Janitor.new()
+local UpdateKeys 
 
 -- Important Client Parts
 local ClientSettings = require(script.Parent:WaitForChild("ClientSettings", 20))
@@ -132,9 +136,48 @@ local ViewModel = {
 		Current = "Right";
 	};
 }
+local Ignore = {
+	workspace.ignoreModel;
+};
+local CameraState = {} do 
+	CameraState.camOffsets = {
+		guiScope = {
+			Rot = V3();
+		};
+		Reload = {
+			Rot = V3();
+			Code = nil;
+		};
+		Recoil = {
+			Rot = V3();
+			Code = nil;
+		};
+	}
+	local initList = ClientSettings.CamSpringDefaults or {0.45,35}
+	table.insert(initList, V3())
+	CameraState.camRecoilSpring = Spring.new(table.unpack(initList))
+end
 local function getAlpha(easing)
 	return Enumeration.EasingFunction[easing].Value
 end
+
+local features do
+	local feat = {}
+	features = setmetatable(feat,{
+		__call = function(self,featA,...)
+			local args = {...}
+			if featA == "getFeature" then
+				local setting = self[args[1]]
+				if setting then
+					return setting
+				end
+			elseif featA == "setFeature" then
+				self[args[1]] = args[2]
+			end
+		end
+	})
+end
+
 ---------
 local lastSideRecoil = {0, 0}
 local  recoilAnim = {
@@ -195,6 +238,7 @@ do
 	local moveAng = 0
 	local isMoveEnabled = true;
 	local walkAnim = "WalkRifle"
+
 	local aimAlpha = 0
 	local leanAnim = {
 		Pos = Spring.new(0.8,16,0);
@@ -437,6 +481,8 @@ do
 				return stanceTrans
 			elseif key == "lean" then
 				return Lean
+			elseif key == "baseanim" then
+				return Anim
 			elseif key == "moveenabled" then
 				return MotionVector
 			elseif key == "motionvector" then
@@ -455,6 +501,8 @@ do
 				return RunningTrans
 			elseif key == "runtransition" then
 				return RunTransition
+			elseif key == "leananim" then
+				return leanAnim
 			elseif key == "walkspeed" then
 				return walkSpeedSpring.p
 			elseif key == "grounded" then
@@ -486,6 +534,8 @@ do
 				end
 			elseif key == "crawlalpha" then
 				crawlAlpha = v
+			elseif key == "baseanim" then
+				Anim = v
 			elseif key == "runtransition" then
 				RunTransition = v
 			elseif key == "lastpos" then
@@ -500,8 +550,6 @@ do
 				leanAnim = v;
 			elseif key == "lean" then
 				Lean = v
-			elseif key == "leananim" then
-				return leanAnim
 			elseif key == "crawlang" then
 				crawlAng = v
 			elseif key == "aimangle" then
@@ -510,6 +558,19 @@ do
 		end
 	})
 end
+-----
+local getTotalCamOffset = ClientSettings.getTotalCamOffset({
+	CameraState = function()
+		return CameraState
+	end;
+	CharState = function()
+		return CharState
+	end;
+	CurrentItem = function()
+		return CurrentItem
+	end;
+	Lerps = Lerps;
+})
 -----
 local function toggleSprint(bool)
 	if AndList({
@@ -529,6 +590,7 @@ local function currentGripArm()
 end
 do
 	local item = nil;
+	local tween = Resources:GetComponent("Tweener");
 	local S = nil;
 	local newMag = false;
 	local Animations = {};
@@ -536,11 +598,32 @@ do
 	local stockType = nil;
 	local sightIndex = 0;
 	local magTable = {};
+	local canSelectFire = true;
+	local fireRate = 0;
+	local canFire = true;
+	local bolting = false;
+	local Firing =  false;
+	local shotCount = 0;
+	local PenetrationTries  = 5;
 	local ammoInClip = 0;
 	local Type = nil;
+	local shotCount = 0;
+	local fireRate = 0;
+	local supp_att = nil;
+	local CurrentCartridge = nil;
+	local barrelColor = nil;
+	local Main = {};
+	local bolting = false;
 	local poses = {};
+	local currentMainIndex = 1;	
 	local deployedBipod = false;
 	local AttachmentMods = Resources:LoadConfiguration("AttachmentModules")
+	local Recoil = RecoilClass.new()
+	local AimSetting = "Out";
+	local FiringSystem = nil;
+	local continuousActions = ClientSettings.Weapon.ContinuousActions
+
+	local Equipped = false
 	local animCancel = PseudoInstance.new("AnimPlaybackController",ClientSettings.Anims.CancelCache,ClientSettings.Anims.NonCancellable)
 	local function getAnimAPI()
 		return ClientSettings.AnimAPI({
@@ -551,27 +634,44 @@ do
 			ItemAPI = CurrentItem;
 			sightIndex = sightIndex;
 			CharacterParts = CharacterParts;
-			--FiringSystem = FiringSystem;
+			FiringSystem = FiringSystem;
 			WeaponUtils = WeaponUtils;
 			poses = poses;
 			ViewModel = ViewModel;
 			CharacterJoints = CharacterJoints;
 			newMag = newMag;
-			AttributeUtils = AttributeUtils;
+			--AttributeUtils = AttributeUtils;
 			ammoInClip = function()
 				return ammoInClip
 			end,
 		})
 	end		
+	local aimedGripCF
+	local RecoilWeights = Resources:LoadConfiguration("RecoilWeights")
+	local RunSequence = Resources:LoadLibrary("FireAnimSequence")
+	local FastDelayS = Resources:LoadLibrary("FastDelaySimple")
+	local projectileTypes =  Resources:LoadConfiguration("ProjectileModes")
+	local recoil = {
+		Tick = 0;
+		Count = 0;
+	};
+	
 	CurrentItem = setmetatable({
 		IsPlayingAnim = function(self)
 			return false
 		end,
 		getArmPos = function(self,pose,arm,invert)
-			local pos = self:getPose(pose)[arm:lower()]
+			local pos = self:getPose(pose)
+			if not pos  then
+				return nil
+			end
+			pos = pos[arm:lower()]
 			local extraOffset = CF.RAW()
 			local result = pos
 			return result			
+		end;
+		getFirePort = function(self,index) 
+			return Main[index] 
 		end;
 		getPose = function(self,poseN)
 			if poses[poseN] then
@@ -680,6 +780,62 @@ do
 					soundConn = nil;
 				end)		
 			end)		
+		end;
+		setupCartridge = function(self)
+			if item then	
+				if Type == "Gun" or Type == "Launcher" then
+					local mag = Magazines[item:GetAttribute("MagType")]
+					if mag then
+						CurrentCartridge = Cartridges[mag.CartridgeName] 
+					end
+				elseif Type == "AmmoBox" then
+					CurrentCartridge = Cartridges[self:getFaceCartridge()]
+				end
+				if CurrentCartridge then
+					CurrentCartridge:resetModifiedStats()
+					if Type == "Gun" or Type == "Launcher" then
+						--table.clear(Main)
+						Main = {};
+						for _, main in ipairs(item:GetChildren()) do
+							if main.Name == "Main" then
+								if main:IsA("BasePart") then
+									if main:FindFirstChild("BarrelIndex") then
+										if tonumber(main.BarrelIndex.Value) then
+											Main[main.BarrelIndex.Value] = main
+											for _, v in ipairs(main:GetChildren()) do
+												if v.Name == "FireSound" then
+													v.RollOffMaxDistance = CurrentCartridge.Range
+												end
+											end
+										end
+									end
+								end
+							end
+						end	
+						--[[if self:getFirePort(1) then
+							for _, v in ipairs(self:getFirePort(1):GetChildren()) do
+								if v.Name == "FireSound" then 
+									v.Volume = v.Volume + (v.Volume * attachmentModifiers.bulletVelocity)										
+								end
+							end
+						end]]--
+						if S.bulletSettings then
+							if S.bulletSettings.SizeOverride then
+								CurrentCartridge.OriginalSize = CurrentCartridge.Size
+								CurrentCartridge.Size = S.bulletSettings.SizeOverride
+							end
+							if S.bulletSettings.ColorOverride then
+								CurrentCartridge.ColorOverride = S.bulletSettings.ColorOverride
+							end
+						end
+						CurrentCartridge:CalibrateSize()
+						if item:GetAttribute("GaugeIndex") then
+							CurrentCartridge:SetupGauge(item:GetAttribute("GaugeIndex"))
+						end
+						--_G.HM:PerformCMAction("UpdateCartridge", CurrentCartridge)
+					end
+				end
+			end
 		end;
 		PlayAnimation = function(self,animName,carry,...)
 			local tween = Resources:GetComponent("Tweener")
@@ -947,6 +1103,7 @@ do
 					_G.HM:PerformCMAction("ShowHand", Hand)
 				end
 			end
+			]]--
 			if WeaponUtils:HasItemCapability(item, "Cartridge") then
 				self:setupCartridge()
 			end
@@ -965,6 +1122,7 @@ do
 				FiringSystem:showMode(S.burstSettings.Amount)
 				self:HandleFireModeAppearance()
 			end
+--[[
 			if WeaponUtils:HasItemCapability(item, "ScopeADS") or  WeaponUtils:HasItemCapability(item, "ADS") then
 				CurrentItem.AimData.Entries = {};
 				for _, part in ipairs(CurrentItem.Value:GetChildren()) do
@@ -988,6 +1146,89 @@ do
 				Character = Character;
 				S = S;
 			})
+		end,
+		HandleExtraFireModes = function(self)
+			--[[if item then
+				if  item:GetAttribute("CurrentGrenade") and (not self.FiringSystem:hasMode("Grenade")) then
+					CurrentItem.FiringSystem:addFireMode(("Grenade"),("GRENADE"):upper())
+				end
+				if item:FindFirstChild("BayonetBlade") then
+					FiringSystem:addFireMode(("Bayonet"),("Bayonet"):upper())
+				end
+			end]]--
+		end,
+		HandleFireModeAppearance = function(self)
+			if item:GetAttribute("FireMode") then
+				FiringSystem:switchTo(item:GetAttribute("FireMode"), S.burstSettings.Amount)
+				if Animations["SelectFireEquip"] then
+					self:PlayAnimation("SelectFireEquip", true)
+				else
+					if item:FindFirstChild("SafetyHinge") then
+						local nextMode = item:GetAttribute("FireMode"):upper()
+						local selectFireHinge = item.SafetyEffector:FindFirstChild("SafetyHinge")
+						local selectFireAngle = S.selectFireSettings.Angles[nextMode]
+						local cf = CF.ANG(selectFireAngle,0,0)
+						if S.selectFireSettings.Direction then
+							if S.selectFireSettings.Direction == "Y" then
+								cf = CF.ANG(0,selectFireAngle,0)
+							elseif S.selectFireSettings.Direction == "Z" then
+								cf = CF.ANG(0,0,selectFireAngle)
+							end
+						end
+						tween("Joint", selectFireHinge, nil, cf, getAlpha("OutQuad"), 0)	
+					elseif item:FindFirstChild("FireModeSwitch") then
+						local nextMode = item:GetAttribute("FireMode"):upper()
+						local selectFireHinge = item.SelectorEffector:FindFirstChild("SelectorHinge")
+						if  nextMode ~= "GRENADE" then
+							local selectFireAngle = S.selectFireSettings.Angles[nextMode]
+							if selectFireAngle then
+								local cf = CF.ANG(selectFireAngle,0,0)
+								if S.selectFireSettings.Direction then
+									if S.selectFireSettings.Direction == "Y" then
+										cf = CF.ANG(0,selectFireAngle,0)
+									elseif S.selectFireSettings.Direction == "Z" then
+										cf = CF.ANG(0,0,selectFireAngle)
+									end
+								end
+								tween("Joint", selectFireHinge, nil, cf, getAlpha("OutQuad"), 0)	
+							end				
+						else
+							if WeaponUtils:GetSubType(item) == "Grenade" and item.Type.Value == "Launcher" then
+								local selectFireAngle = S.selectFireSettings.Angles[nextMode]
+								if selectFireAngle then
+									local cf = CF.ANG(selectFireAngle,0,0)
+									if S.selectFireSettings.Direction then
+										if S.selectFireSettings.Direction == "Y" then
+											cf = CF.ANG(0,selectFireAngle,0)
+										elseif S.selectFireSettings.Direction == "Z" then
+											cf = CF.ANG(0,0,selectFireAngle)
+										end
+									end
+									tween("Joint", selectFireHinge, nil, cf, getAlpha("OutQuad"), 0)	
+								end
+
+								return
+							end
+							local selectFireHinge2 = item.GSelectorEffector:FindFirstChild("GSelectorHinge")
+							local cf = CF.ANG(selectFireHinge2:GetAttribute("FireAngle"),0,0)
+							if selectFireHinge2:GetAttribute("FireDirection") then
+								if selectFireHinge2:GetAttribute("FireDirection") == "Y" then
+									cf = CF.ANG(0,RAD(selectFireHinge2:GetAttribute("FireAngle")),0)
+								elseif selectFireHinge2:GetAttribute("FireDirection") == "Z" then
+									cf = CF.ANG(0,0,RAD(selectFireHinge2:GetAttribute("FireAngle")))
+								end
+							end
+							tween("Joint", selectFireHinge2, nil, cf, getAlpha("OutQuad"), 0)	
+						end
+					end
+				end
+			end
+		end,
+		enableLinks = function(self)
+			
+		end,
+		disableLinks = function(self)
+			
 		end,
 		Equip = function(self)
 			--table.clear(Lasers)
@@ -1047,6 +1288,300 @@ do
 			self:SignalEquipped()
 
 		end;
+		SignalEquipped = function(self)
+			task.delay(S.equipSettings.Time,function()
+				Equipped = true;
+				if S.animSounds then
+					if S.animSounds["Equip"] then
+						self:playSound("Equip")
+					end
+				end
+
+				if WeaponUtils:HasItemCapability(item, "TrackAmmo") then
+					--self:TrackAmmo()
+				end 
+				--[[
+				if  WeaponUtils:HasItemCapability(item, "Elektromagnetos")  then
+					_G.HM:PerformCMAction("PopulateRadioCalls")
+				end
+				if  WeaponUtils:HasItemCapability(item, "CanvasStill")  then
+					itemJanitor:Add(item.Image.Changed:Connect(function(picture)
+						if picture ~= "" then
+							item.Canvas.PictureDecal.Texture = picture
+						end
+					end), "Disconnect", "PictureRender")
+					item.Canvas.PictureDecal.Texture = item.Image.Value
+				elseif  WeaponUtils:HasItemCapability(item, "CanvasMap")  then
+					_G.SetupMap(item.Canvas)
+				end
+				if WeaponUtils:HasItemCapability(item, "IdleEquip") then
+					CurrentItem:EquipIdle()
+				end
+
+				_G.HM:SetContextUIEnabled( _G.HM.HUDEnabled)
+]]--
+				WeaponUtils:RunHook(item, "Equip", self, {
+					tween = tween;
+					getAlpha = getAlpha;
+					ViewModel = ViewModel;
+					Character = Character;
+					S = S;
+
+				})
+			end)
+		end,
+		FireProjectile = function(self, projectileType, ...)
+			local item2 = item
+			local func = projectileTypes[projectileType]
+			if func then
+				local args = {...}
+				func({
+					calibrateFireRateFromHeat = function()
+						if item2:FindFirstChild("Barrel") then
+							if item2:GetAttribute("Heat")  then
+								if item2:GetAttribute("Heat") >= 1 then
+									fireRate = S.roundsPerMin + math.random(-200,200)
+								end
+							end
+						end
+					end,
+					Item = item2;
+					RemoteService = RemoteService;
+					Settings = S;
+					getFireRate = function()
+						return fireRate
+					end,
+					getBasePose = function()
+						local basePos = WeaponUtils:GetBasePose(item2)
+						return basePos
+					end,
+					getGripC1 = function()
+						return if CurrentItem.Aimed and (InputComp.CurrentIScheme ~= "Gunner") then aimedGripCF(CurrentItem:GetSight()) else  CurrentItem:getArmPos(basePos,"Grip")
+					end,
+					Cycle = function(times, callback)
+						if typeof(callback) ~= "function" then
+							return
+						end
+						for i = 1, times or 1 do
+							callback(i)
+						end
+					end,
+					setCurrentIndex = function(index)
+						currentMainIndex = index
+					end,
+					startSequence = function(list, rpm)
+						local pr = RunSequence:RunSequence(list,{
+							rpm;
+							S.boltSettings;
+							BoltWelds;
+							item;
+							S.hammerRot;
+							tween;
+							getAlpha("Deceleration");
+							getAlpha("Sharp");
+							S.carryHandleAngle;
+							S.hammerReset;
+							S.actionType;
+							item:GetAttribute("Ammo");
+							item:GetAttribute("ClipSize");
+							item:FindFirstChild("CylinderEffector") or false;
+							S.boltSettings.CHKick  or false;
+							S.boltSettings.CHRot  or false;
+						})
+						return pr
+					end,
+					getFirePort = function(index)
+						return CurrentItem:getFirePort(index or 1)
+					end,
+					spawnMuzzleFlash = function(fp, fr, customRange, isTank)
+						RemoteService.send("Server","MuzzleFlashServer",fp,fp.CFrame,{
+							Suppressed = supp_att;
+							fireSoundSettings = S.fireSoundSettings;
+							Tank = isTank or false;
+							fireRate = fr;
+							Range = customRange or CurrentCartridge.Range;
+						})
+					end,
+					getCurrentPort = function()
+						return Main[currentMainIndex]
+					end,
+					fireProjectileWeapon = function(fp, customIndex, grenade, hpOverride, velocityOverride, coax, cannon, coaxName)
+						RemoteService.send("Server","FireWeapon",customIndex or currentMainIndex,CF.RAW(fp.Position,fp.Position + fp.CFrame.lookVector),{
+							Velocity = velocityOverride or CurrentCartridge.Velocity;
+							Ignore = {unpack(Ignore);if not grenade then ((not S.gunType.Explosive) and workspace.BulletStorage or nil) else workspace.BulletStorage;};
+							Grenade = if grenade ~= nil then grenade else false;
+							Mag = if grenade then item:GetAttribute("CurrentGrenade") else (S.partialMag and CurrentCartridge.Name or item:GetAttribute("MagType"));
+							Main = fp;
+							Coax = coax or false;
+							cannon = cannon;
+							CoaxCartridge = coaxName;
+							Hollow = hpOverride ~= nil and hpOverride or item:FindFirstChild("MagHollowSpitzer",true)
+						})
+					end,
+					incrementPort = function()
+						if S.multiBarrel then
+							currentMainIndex += 1
+							if currentMainIndex > S.multiBarrel then
+								currentMainIndex = 1	
+							end
+						end
+					end,
+					hasNoBarrels = function()
+						return #Main <= 0
+					end,
+					spawnBlast = function(fr)
+						for i = 2, #Main do
+							if Main[i]:FindFirstChild("Emissive") then
+								RemoteService.send("Server","MuzzleFlashServer",CurrentItem:getFirePort(i),CurrentItem:getFirePort(i).CFrame,{
+									Suppressed = false;
+									fireSoundSettings = S.fireSoundSettings;
+									Tank = false;
+									fireRate = fr;
+									Range = CurrentCartridge.Range;
+								})
+							end
+						end
+					end,
+					getRecoil = function()
+						return Recoil:GetGunTransform(Aimed)
+					end,
+					lastRecoil = function()
+						return recoil.Tick
+					end,
+					spawnRecoil = function(recoilT, camRecoilRot, fr)
+						tween("Recoil",recoilT.Pos,recoilT.Rot,  getAlpha("Smooth"),fr)
+						tween("Cam","Recoil",camRecoilRot, getAlpha("Smooth"),fr)
+					end,
+					spawnRecoilOverride = function(recoilT, overrideRot, camRecoilRot, fr)
+						tween("Recoil",recoilT.Pos, overrideRot or recoilT.Rot,  getAlpha("Smooth"),fr)
+						tween("Cam","Recoil",camRecoilRot, getAlpha("Smooth"),fr)
+					end,
+					spawnRecoilRumble = function(rumbleType)
+						InputComp.PlayRumble(rumbleType)
+					end,
+					getCurrentGrip = function()
+						return ViewModel.Grips[ViewModel.Grips.Current]
+					end,
+					CF = CF;
+					ABS = ABS;
+					COS = COS;
+					SIN = SIN;
+					tweenJoint = function(joint, C0, C1, alpha, duration)
+						tween("Joint", joint, C0 or false, C1, getAlpha(alpha), duration)
+					end,
+					SimpleDelay = FastDelayS;
+					stopRecoilRumble = function(rumbleType)
+						InputComp.StopRumble(rumbleType)
+					end,
+					stopRecoil = function(fr)
+						tween("Recoil",V3(), V3(), getAlpha("Smooth"),fr)
+						tween("Cam","Recoil", V3(), getAlpha("Smooth"),fr)
+					end,
+					endSequence  = function(listEnd, rpm)
+						RunSequence:RunSequence(listEnd,{
+							rpm;
+							S.boltSettings;
+							BoltWelds;
+							item;
+							S.hammerRot;
+							tween;
+							getAlpha("Deceleration");
+							getAlpha("Sharp");
+							S.carryHandleAngle;
+							S.hammerReset;
+							S.actionType;
+							item:GetAttribute("Ammo");
+							item:GetAttribute("ClipSize");
+							item:FindFirstChild("CylinderEffector") or false;
+							S.boltSettings.CHKick  or false;
+							S.boltSettings.CHRot  or false;
+						})
+					end,
+					Wait = function(t)
+						return FastWait(t)
+					end,
+					lockOpenBolt = function()
+						if (S.boltSettings.LockKick) then
+							tween("Bolt","Main",S.boltSettings.LockKick,V3(),getAlpha("Standard"), 0.05)
+							if S.boltSettings.LockCHKick then
+								tween("Bolt","ChargingHandle",S.boltSettings.LockCHKick,V3(),getAlpha("Standard"), 0.05)
+							end
+						elseif S.actionType == "SemiAuto" then
+							if item:GetAttribute("Ammo") <= 0 then
+								tween("Bolt","Main",S.boltSettings.Kick,S.boltSettings.Rot,getAlpha("Deceleration"),0.05)
+							end
+						end
+					end,
+					increaseShotCount = function()
+						shotCount +=  1
+					end,
+					getShotCount = function()
+						return shotCount
+					end,
+					transformSideRecoil = function(index, value)
+						Recoil.lastSideRecoil[index] = value
+					end,
+					getContinuousActions = function()
+						return continuousActions
+					end,
+					hasAnimation = function(animName)
+						return Animations[animName] ~= nil
+					end,
+					unAim = function()
+						if CurrentItem.Aimed then CurrentItem:unAimGun() end
+					end,
+					isAimedOut = function()
+						return AimSetting == "Out"
+					end,
+					startBoltCycle = function()
+						bolting = true;
+					end,
+					stopBoltCycle = function()
+						bolting = false;
+					end,
+					playAnim = function(animName, stop)
+						CurrentItem:PlayAnimation(animName,stop ~= nil and stop or true)
+					end,
+					openEjectionCover = function()
+						local coverHinge = item:FindFirstChild("CoverEffector") 
+						if coverHinge then
+							coverHinge = coverHinge:FindFirstChild("CoverHinge")
+							if coverHinge then
+								if S.coverEjectX and (not S.lockCover) then
+									tween("Joint",coverHinge,false,CF.ANG(S.coverEjectX,S.coverEjectY,S.coverEjectZ),getAlpha("Spring"),0.1)
+									FastDelayS(0.2,function()
+										tween("Joint",coverHinge,false,CF.RAW(),getAlpha("Spring"),0.1)
+									end)
+								end
+							end
+						end
+					end,
+					getVehicleComponent = function()
+						return Resources:GetComponent("Vehicles")
+					end,
+					getCartridge = function(cartName)
+						return Cartridges[cartName]
+					end,
+					getItemType = function()
+						return Type
+					end,
+					playSound = function(...)
+						CurrentItem:playSound(...)
+					end,
+					getSubType = function()
+						return WeaponUtils:GetSubType(item)
+					end,
+					Delay = task.delay;
+					fireAgain = function(...)
+						CurrentItem:FireProjectile(...)
+					end,
+					updateBarrelColor = function()
+						item.Barrel.Color = Lerps.Color3(barrelColor,BrickColor.new("Bright red").Color,item:GetAttribute("Heat"))
+					end,
+					RNG = RNG;
+				}, args)
+			end
+		end,
 	},{
 		__index = function(self, k)
 			local key = k:lower()
@@ -1058,8 +1593,183 @@ do
 				return stockType 
 			elseif key == "type" then
 				return Type 
+			elseif key == "equipped" then 
+				return Equipped
+			elseif key == "firingapi" then
+				local obj = self
+				local burstDebounce = false
+				local burstDelay = 0
+				return setmetatable({
+					Click = function(self)
+						if item:GetAttribute("Ammo") <= 0 or ( item:GetAttribute("AmmoInd") and  item:GetAttribute("AmmoInd") <= 0)then
+							obj:playSound("Click")
+						end
+					end;
+					fire = function(self,projectileType,...)
+						CurrentItem:FireProjectile(projectileType, ...)
+					end,
+					disableBayonet = function(self)
+						if item:FindFirstChild("DmgPoint",true) then
+							RemoteService.send("Server","DisabledBayonetCharge",CurrentItem.Value)
+						end
+					end;
+					enableBayonet = function(self)
+						if item:FindFirstChild("DmgPoint",true) then
+							RemoteService.send("Server","EnabledBayonetCharge",CurrentItem.Value)
+						end
+					end;
+					makeAMove = function(self,move)
+						CurrentItem:makeAMove(move)
+					end,
+					startShake = function(self)
+						InputComp.PlayRumble("Recoil")
+						InputComp.PlayRumble("GripRecoil")
+
+					end,
+					endShake = function(self)
+						InputComp.StopRumble("Recoil")
+						InputComp.StopRumble("GripRecoil")
+
+					end,
+					doBurst = function(self,action,burstTime)
+						if not burstDebounce then
+							burstDebounce = true
+							local i = 0
+							local bt = 0
+							while Humanoid.Health > 0 do
+								local dt = RunService.Heartbeat:Wait()	
+								if i >= S.burstSettings.Amount  then
+									canFire = true;
+									break;
+								end
+								bt = bt + dt 
+								if bt >= (S.burstSettings.fireRateBurst and burstTime or S.burstSettings.Time / S.burstSettings.Amount) then
+									bt = 0
+									action()
+									i = i + 1
+								end
+							end
+							self:yieldBurstFireRate(burstTime)
+							burstDebounce = false
+						end
+					end;
+					shrinkLink = function(self)
+						if item then
+							if item:FindFirstChild("StartingRounds",true) then
+								if item:GetAttribute("Ammo") <= 20 then
+									for i = #item.Magazine.Rounds:GetChildren(), item:GetAttribute("Ammo"), -1 do
+										local round = item.Magazine.Rounds:FindFirstChild("Round".. i)
+										if round then round:Destroy() end
+										local round = item.Magazine.RoundJoints:FindFirstChild("BeltConstraint".. i)
+										if round then round:Destroy() end	
+									end
+								else
+									local ammoOut = item.Magazine.StartingRounds.Value
+									local link_n = ammoOut - (item:GetAttribute("Ammo") % ammoOut)
+									local link = item.Magazine.RoundJoints:FindFirstChild("BeltConstraint"..link_n)
+									if  link  then
+										link.TargetAngle = link.TargetAngle + 5
+										FastDelay((60/fireRate),function()
+											link.TargetAngle  = link.TargetAngle - 5
+										end)
+									end
+								end
+							end
+						end
+					end;
+					useLethal = function(self)
+						self:PlayAnimation("ReloadAttachment", true)	
+					end;											
+					yieldFireRate = function(self)
+						local cd = 60 / fireRate
+						local waittime = cd - burstDelay
+						local waitedTime = task.wait(waittime)
+						burstDelay = waitedTime - waittime
+					end;
+					yieldBurstFireRate = function(self,burstTime)
+						local cd = S.burstSettings.fireRateBurst and burstTime or S.burstSettings.Wait
+						local waittime = cd - burstDelay
+						local waitedTime = task.wait(waittime)
+						burstDelay = waitedTime - waittime
+					end;
+					playAnimation = function(self,...)
+						obj:PlayAnimation(...)
+					end
+				},{
+					__index = function(self,k)
+						if k == "currentFireMode" then
+							if FiringSystem then
+								if FiringSystem.currentMode then
+									return FiringSystem.currentMode.Name:upper();
+								end
+							end
+						elseif k == "canFire" then
+							return canFire
+						elseif k == "isCrawling" then
+							return CharState.currentState == "Crawling"
+						elseif k == "Reloading" then
+							return Reloading
+						elseif k == "MB1Down" then
+							return InputComp:IsActive();
+						elseif k == "TankMG" then
+							return _G.Cannon
+						elseif k == "Ammo" then	
+							local item2 = item
+							if (not item2) and _G.Cannon then
+								return _G.Cannon:GetAttribute("CoaxAmmo")
+							end
+							if not item then
+								return 0
+							end
+							if item:FindFirstChild("Rounds") then
+								local count = #item.Rounds:GetChildren()
+								if S.reloadSettings.ammoProfile then
+									if S.reloadSettings.ammoProfile == "DBShotgun" then
+										count = 2 - shotCount
+									elseif S.reloadSettings.ammoProfile == "Revolver" then
+										count = item:GetAttribute("ClipSize") - shotCount
+									end
+								end
+								if item:FindFirstChild("ShellStorage") then
+									count += #item.StoredRounds:GetChildren()
+								end
+
+								return count;
+							end 
+							return item:GetAttribute("Ammo");
+						elseif k == "TrueAmmo" then
+							return item:GetAttribute("Ammo");
+						elseif k == "Lethals" then
+							return item:GetAttribute("Grenades");
+						elseif k == "canFireGrenade" then
+							return item:GetAttribute("GrenadesReady")
+						elseif k == "Humanoid" then
+							return Humanoid;
+						elseif k == "fireRate" then
+							if _G.Cannon then
+								return 60 / (_G.Cannon:GetAttribute("CoaxFireRate") or 700)
+							end
+							return 60 / fireRate;
+						elseif k == "boltAction" then
+							return S.actionType == "Bolt";
+						end
+					end;
+					__newindex = function(self,k,v)
+						if k == "canFire" then
+							canFire = v;
+						elseif k == "Firing" then
+							Firing = v;
+						elseif k == "newMag" then
+							newMag = v;
+						end
+					end
+				})
 			elseif key == "animations" then
 				return Animations
+			elseif key == "equipped" then
+				Equipped = v
+			elseif key == "firingsystem" then
+				return FiringSystem	
 			end
 		end,
 		__newindex = function(self, k, v)
@@ -1078,7 +1788,7 @@ do
 					--Aimed = false;
 					--AimChanged:Fire(Aimed)
 					--table.clear(Main);
-					--Main = {};
+					Main = {};
 					--currentMainIndex = 1;
 					--currentLaserIndex = 0;
 					newMag = false
@@ -1226,7 +1936,7 @@ RemoteService.listen("Client","Fetch","InitLoadoutData",function(loadoutList)
 			end
 		end
 	end
-	
+
 	return true
 end)	
 InputComp.AddLoadoutScheme("LoadoutPC",
@@ -1876,9 +2586,32 @@ do
 	function RenderEngine:AddCameraRender(renderFunc: (number) -> any)
 		table.insert(sequences["Camera"], renderFunc)
 	end
+	local cameraOffset = ClientSettings.CamOffsets;
+	local finalCamOffset  = V3()
+	local fco
+	local Cfv
+	RenderEngine:AddCameraRender(function(dt)
+		finalCamOffset  = V3()
+		CameraState.camRecoilSpring.g = (CameraState.camOffsets["Recoil"].Rot)	
+		CameraState.camRecoilSpring:Update(dt)
+		local newType = (CurrentItem.Value and CurrentItem.Type or (lastItem and lastItem.Type.Value or "Gun"))
+		local fcFunc = getTotalCamOffset[cameraOffset[newType]]	
+		if fcFunc then	
+			finalCamOffset, fco = fcFunc(dt)
+		end
+	end)
 	RenderEngine:AddCameraRender(function(dt)
 		local camOff = Vector2.new(0,0)
 		CameraService.CurrentCamMode.cameraPerspective = _G.CameraAng + camOff
+		CameraService.FOVCFrame = CameraService.CFrame + (CameraService.Cam:GetRenderCFrame().lookVector * fco.Z)
+		if not CameraService.Cam:FindFirstChild("FOVCFrame") then
+			Cfv = Instance.new("CFrameValue")
+			Cfv.Parent = CameraService.Cam
+			Cfv.Name = "FOVCFrame"
+		else
+			Cfv = CameraService.Cam.FOVCFrame
+		end
+		Cfv.Value = CameraService.FOVCFrame
 		if CurrentItem.Value and CurrentItem.Animations then
 			local Increment = 90 * 2.5 --1.5 / 0.4
 			CharState.crawlAlpha = MIN(MAX(CharState.crawlAlpha + ((CharState.currentState == "Crawling") and Increment or -Increment) * dt, 0), 90)
@@ -1896,18 +2629,16 @@ do
 			Humanoid.Jump = jump --and Character:GetAttribute("CurrentStamina") >= threshold
 		end)
 		InputComp.CharacterController:UpdateJump()
+		CameraService.CurrentCamMode.offset = V3(finalCamOffset.X,finalCamOffset.Y,CharState.crawlCamRot + finalCamOffset.Z + (CharState.leanAnim.Pos.p));
 		if ViewModel.headWeld and (not Humanoid.Sit) and (not Character.ExitingVehicle.Value) then
-			--ViewModel.headWeld.C1 = CF.ANG(-_G.CameraAng.y - finalCamOffset.Y, 0, 0)
-			ViewModel.headWeld.C1 = CFrame.Angles(-_G.CameraAng.y, 0, 0)
+			ViewModel.headWeld.C1 = CF.ANG(-_G.CameraAng.y - finalCamOffset.Y, 0, 0)
 			--[[if CurrentItem.Aimed and angle_turn then
 				ViewModel.headWeld2.C1 = CFrame.new(0, -0.5, 0) * CF.ANG(0, 0, CurrentItem.Settings.aimSettings.headTilt) * CF.RAW(0, 0.5, 0)
 			elseif not CurrentItem.Aimed then
 				ViewModel.headWeld2.C1 = CF.ANG(0, 0, 0)
 			end ]]--
-			--CharacterParts.HRP.CFrame = CF.RAW(CharacterParts.HRP.Position) * CF.ANG(0, _G.CameraAng.x + finalCamOffset.X, 0)
-			CharacterParts.HRP.CFrame = CFrame.new(CharacterParts.HRP.Position) * CFrame.Angles(0, _G.CameraAng.x, 0)
+			CharacterParts.HRP.CFrame = CF.RAW(CharacterParts.HRP.Position) * CF.ANG(0, _G.CameraAng.x + finalCamOffset.X, 0)
 		end
-		--CameraService.CurrentCamMode.offset = V3(finalCamOffset.X,finalCamOffset.Y,CharState.crawlCamRot + finalCamOffset.Z + (CharState.leanAnim.Pos.p));
 	end)
 
 end
@@ -2147,6 +2878,34 @@ do
 			tween("Joint",BoltWelds[key],false,bCf,Alpha,0)
 		end
 	end)
+	tween:addTweenFunction("Cam", function(Key,newRot,Alpha,Duration)			
+		task.spawn(function()
+			if typeof(Alpha) == "string" then 
+				Alpha = getAlpha(Alpha)
+			end
+			local newCode = RNG:NextInteger(-1e9, 1e9)
+			CameraState.camOffsets[Key].Code = newCode
+			local frames = 30
+			local Increment = (frames /60) / Duration
+			local prevRot = CameraState.camOffsets[Key].Rot
+			local X = 0
+			local t0 = tick()
+			Alpha = EasingFunction[Alpha]
+			while true do
+				local  dt = RunService.RenderStepped:Wait()
+				X = X + (Increment)
+				if CameraState.camOffsets[Key].Code ~= newCode then break end
+				if (not CurrentItem.Equipped) then break end
+				CameraState.camOffsets[Key].Rot = prevRot:lerp(newRot, Alpha((X/frames) * Duration,0,1,Duration))
+				CameraState.camRecoilSpring.g = CameraState.camOffsets[Key].Rot
+				if X >= frames  then break end
+			end
+
+			if CameraState.camOffsets[Key].Code == newCode then
+				CameraState.camOffsets[Key].Code = nil
+			end
+		end)
+	end)
 	tween:addTweenFunction("Recoil", function(newPos,newRot,Alpha,Duration)
 		task.spawn(function()
 			if typeof(Alpha) == "string" then 
@@ -2271,6 +3030,91 @@ RemoteService.listen("Client","Send","SetupBolts",function(bW,item)
 		end
 	end
 end)
+
+RemoteService.listenU("Client","Bounce","MuzzleFlash",function(main,cf,options)
+	if  CharacterParts.HRP then
+		local tank = options.Tank
+		SoundSys:FireMuzzleSounds(main,cf,options)
+		if not tank then
+			do
+				local function doBlast(m)
+					for _, v in ipairs(m:GetChildren()) do
+						if m.Parent:GetAttribute("Heat") then
+							if m.Parent:GetAttribute("Heat") >= 0.5 then
+								if v.Name == "OverHeat" then
+									v:Emit((v.Rate * m.Parent:GetAttribute("Heat")) * 2)
+								end
+							end
+						end
+						if v.Name:find("FlashFX") or v.Name == ("Smoke") then
+							if v:IsA("ParticleEmitter") then
+								if v.Name:find("FlashFX") then
+									if m:GetAttribute("Supressed") and (not v:GetAttribute("SExempt")) then
+										continue
+									end
+								end
+								v:Emit(if v.Rate < 250 then v.Rate else v.Rate/100)
+								task.delay( 60/1200, function()
+									v:Clear()
+								end)
+							elseif  v:IsA("Beam") then
+								v.Enabled = true
+								task.delay(0.05,function()
+									v.Enabled = false
+								end)
+							elseif  v:IsA("PointLight") then
+								if m:GetAttribute("Supressed") and (not v:GetAttribute("SExempt")) then
+									continue
+								end
+								v.Enabled = true
+								task.delay(0.05,function()
+									v.Enabled = false
+								end)
+							end
+						end
+					end
+				end
+				doBlast(main)
+				if main:FindFirstChild("Backblast") then
+					if main.Backblast.Value then
+						doBlast(main.Backblast.Value)
+					end
+				end
+			end
+		else
+			do
+				for _, v in ipairs(main:GetChildren()) do
+					if v.Name:find("Emit") then
+						if v:IsA("ParticleEmitter") then
+							v.Enabled = true
+							task.delay(1,function()
+								v.Enabled = false
+							end)
+						elseif  v:IsA("Beam") then
+							v.Enabled = true
+							task.delay(1,function()
+								v.Enabled = false
+							end)
+						elseif  v:IsA("PointLight") then
+							v.Enabled = true
+							task.delay(1,function()
+								v.Enabled = false
+							end)
+						end
+					elseif v.Name == "Smoke" then
+						if v:IsA("ParticleEmitter") then
+							v.Enabled = true
+							task.delay(1,function()
+								v.Enabled = false
+							end)
+						end
+					end
+				end
+			end
+		end
+	end	
+end)
+
 -------
 do
 	local tween = Resources:GetComponent("Tweener")
@@ -2458,6 +3302,7 @@ do
 			end
 
 		end))		
+		UpdateKeys()
 		InputComp.CharacterController:Enable(true)
 	end)
 	workspace.DescendantRemoving:Connect(function(c)
@@ -2592,8 +3437,73 @@ local function UpdateGeneralKeys()
 		end
 	end	
 end;
-local function UpdateKeys()
+UpdateKeys = function ()
+	local tween = Resources:GetComponent("Tweener")
 	UpdateGeneralKeys()
+	for _, pl in ClientPlugins do
+		if pl.SchemeName and pl.OnSetupScheme and pl.GetInitialSchemeData then
+			local dat = pl.GetInitialSchemeData({
+				WeaponUtils = WeaponUtils;
+				Player = player;
+				CurrentWeapon = CurrentItem.Value;
+				CurrentItem = CurrentItem;
+				RAD = RAD;
+				getAlpha = getAlpha;
+				CF = CF;
+				Character = function()
+					return Character;
+				end,
+				CharState = CharState;
+				Humanoid = function()
+					return Humanoid;
+				end;
+				TweenSystem = tween;
+				--ZoomModeEnabled = ZoomModeEnabled;
+				RemoteService = RemoteService;
+				armC0 = armC0;
+				ViewModel = ViewModel;
+				ClientPlugins = ClientPlugins;
+						--[[Vehicle = function()
+							if not currentVehicle then
+								return
+							end
+							return currentVehicle.Vehicle
+						end;]]--
+			}, Components)
+			if not dat then
+				continue
+			end
+			Components.Input.AddInputScheme(pl.SchemeName, table.unpack(dat))
+			pl.OnSetupScheme({
+				WeaponUtils = WeaponUtils;
+				Player = player;
+				CurrentWeapon = CurrentItem.Value;
+				CurrentItem = CurrentItem;
+				RAD = RAD;
+				CF = CF;
+				getAlpha = getAlpha;
+				Character = function()
+					return Character;
+				end,
+				CharState = CharState;
+				Humanoid = function()
+					return Humanoid;
+				end;
+				TweenSystem = tween;
+				--ZoomModeEnabled = ZoomModeEnabled;
+				RemoteService = RemoteService;
+				armC0 = armC0;
+				ViewModel = ViewModel;
+				ClientPlugins = ClientPlugins;
+						--[[Vehicle = function()
+							if not currentVehicle then
+								return
+							end
+							return currentVehicle.Vehicle
+						end;]]--
+			}, Components)
+		end
+	end
 	for k, v in pairs(ClientSettings.MovementMap) do
 		if typeof(v) == "table" then
 			for _, ev in ipairs(v) do
