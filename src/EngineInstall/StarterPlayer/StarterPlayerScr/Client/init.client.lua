@@ -157,6 +157,7 @@ local CameraState = {} do
 	table.insert(initList, V3())
 	CameraState.camRecoilSpring = Spring.new(table.unpack(initList))
 end
+
 local function getAlpha(easing)
 	return Enumeration.EasingFunction[easing].Value
 end
@@ -176,6 +177,8 @@ local features do
 			end
 		end
 	})
+	Resources:AddComponent("FeatureCheck", features)
+
 end
 
 ---------
@@ -499,10 +502,10 @@ do
 				return moveAng
 			elseif key == "runningtrans" then
 				return RunningTrans
-			elseif key == "runtransition" then
-				return RunTransition
 			elseif key == "leananim" then
 				return leanAnim
+			elseif key == "runtransition" then
+				return RunTransition
 			elseif key == "walkspeed" then
 				return walkSpeedSpring.p
 			elseif key == "grounded" then
@@ -534,12 +537,12 @@ do
 				end
 			elseif key == "crawlalpha" then
 				crawlAlpha = v
-			elseif key == "baseanim" then
-				Anim = v
 			elseif key == "runtransition" then
 				RunTransition = v
 			elseif key == "lastpos" then
 				lastPos = v
+			elseif key == "baseanim" then
+				Anim = v
 			elseif key == "pdist" then
 				pDist = v;
 			elseif key == "stancesway" then
@@ -550,6 +553,7 @@ do
 				leanAnim = v;
 			elseif key == "lean" then
 				Lean = v
+			
 			elseif key == "crawlang" then
 				crawlAng = v
 			elseif key == "aimangle" then
@@ -2560,7 +2564,7 @@ do
 	end),"Disconnect","CrawlAnimChar1")
 
 end
-
+local lastItem = nil;
 do
 	local sequences = {};
 	sequences.General = {};
@@ -3524,6 +3528,7 @@ do
 	Components.Input = InputComp
 	Components.Camera = CameraService
 	Components.Lighting = PhotoSiris
+	Components.Sound = SoundSys
 	UpdateKeys()
 
 	for _, pl in ClientPlugins do

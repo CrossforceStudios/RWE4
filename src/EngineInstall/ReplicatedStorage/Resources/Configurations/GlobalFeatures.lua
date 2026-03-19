@@ -24,4 +24,6 @@ return {
 	SprintDefaults = true;
     -- Hats/Helmets fling off (for everyone)
     HatFling = false;
+    -- Bullet impacts (toggleable)
+	Impacts = true;
 }

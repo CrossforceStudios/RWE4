@@ -317,6 +317,84 @@ local ClientSettings = {
 			end,
 		};
 	};
+	HitMaterials = {
+		Enum.Material.Plastic;
+		Enum.Material.Slate;
+		Enum.Material.Concrete;
+		Enum.Material.CorrodedMetal;
+		Enum.Material.DiamondPlate;
+		Enum.Material.Foil;
+		Enum.Material.Marble;
+		Enum.Material.Granite;
+		Enum.Material.Brick;
+		Enum.Material.Grass;
+		Enum.Material.Pebble;
+		Enum.Material.SmoothPlastic;
+		Enum.Material.Metal;
+		Enum.Material.Cobblestone;
+		Enum.Material.Asphalt;
+		Enum.Material.Fabric;
+		Enum.Material.CrackedLava;
+		Enum.Material.Glacier;
+		Enum.Material.Glass;
+		Enum.Material.Ground;
+		Enum.Material.Ice;
+		Enum.Material.LeafyGrass;
+		Enum.Material.Mud;
+		Enum.Material.Rock;
+		Enum.Material.Pavement;
+		Enum.Material.Sand;
+		Enum.Material.Sandstone;
+		Enum.Material.Snow;
+		Enum.Material.Water;
+		Enum.Material.Wood;
+		Enum.Material.WoodPlanks;
+
+	};
+	MaterialGroups = {
+		["Rock"] = {"Concrete";"Rock";"Slate";"Brick";"Marble";"Granite";"Cobblestone";"Asphalt";"CrackedLava";"Pavement";};
+		["Dirt"] = {"Grass";"Sand";"Mud";"LeafyGrass";"Limestone";"Sandstone";"Salt";"Pebble";"Snow";"Ground";};
+		["Metal"] = {"CorrodedMetal";"DiamondPlate";"Metal";"Foil";};
+		["Wood"] = {"Wood";"WoodPlanks";};
+		["Plastic"] = {"Plastic";"SmoothPlastic";};
+		["Ice"] = {"Ice";"Glacier";"Neon";};
+		["Water"] = {"Water";};
+	};
+	HoleTypes = {
+		[Enum.Material.Asphalt] = {4117566130;4117568052;4117568791;4117571119;4117572104;};
+		[Enum.Material.Basalt] = {4123587259;4123587587;4123589997;};
+		[Enum.Material.Brick] = {4123587259;4123587587;4123589997;};
+		[Enum.Material.Cobblestone] = {4123587259;4123587587;4123589997;};
+		[Enum.Material.Concrete] = {4123587259;4123587587;4123589997;};
+		[Enum.Material.CorrodedMetal] = {4117518488;4117519514;4117520130;};
+		[Enum.Material.CrackedLava] = {64291977;64291961;};
+		[Enum.Material.DiamondPlate] = {4123588366;4123588772;4123589209;4123587935;4123589649;};
+		[Enum.Material.Fabric] = {64291977;64291961};
+		[Enum.Material.Foil] = {64291977;64291961};
+		[Enum.Material.Glacier] = {64291977;64291961};
+		[Enum.Material.Glass] = {4117258050;4117259227;4117269028;4117270097;4117272383;4117274048;4117276630;4117278966;};
+		[Enum.Material.Granite] = {64291977;64291961};
+		[Enum.Material.Grass] = {64291977;64291961};
+		[Enum.Material.Ground] = {64291977;64291961;};
+		[Enum.Material.Ice] = {4117258050;4117259227;4117269028;4117270097;4117272383;4117274048;4117276630;4117278966;};
+		[Enum.Material.LeafyGrass] = {64291977;64291961};
+		[Enum.Material.Marble] = {64291977;64291961};
+		[Enum.Material.Metal] = {4117520130;4117520130;4117518488;};
+		[Enum.Material.Mud] = {64291977;64291961};
+		[Enum.Material.Pavement] = {4123587259;4123587587;4123589997;};
+		[Enum.Material.Pebble] = {64291977;64291961};
+		[Enum.Material.Plastic] = {64291977;64291961};
+		[Enum.Material.Rock] = {4123587259;4123587587;4123589997;};
+		[Enum.Material.Sand] = {64291977;64291961};
+		[Enum.Material.Sandstone] = {64291977;64291961};
+		[Enum.Material.Slate] = {4123587259;4123587587;4123589997;};
+		[Enum.Material.SmoothPlastic] = {64291977;64291961};
+		[Enum.Material.Snow] = {64291977;64291961};
+		[Enum.Material.Wood] = {4117162425;4117163329;4117162967;4117163813;4117164277;};
+		[Enum.Material.WoodPlanks] = {4117162425;4117163329;4117162967;4117163813;4117164277;};
+		[Enum.Material.Water] = {4671887658;4671888012;4671888241;4671888474;4671888745;};
+
+	};
 	LeanAngle = math.rad(15);
 	MovementMap = {
 		[Enum.PlayerActions.CharacterForward] = Enum.KeyCode.W;
@@ -324,16 +402,11 @@ local ClientSettings = {
 		[Enum.PlayerActions.CharacterLeft] = Enum.KeyCode.A;
 		[Enum.PlayerActions.CharacterRight] = Enum.KeyCode.D;
 		[Enum.PlayerActions.CharacterJump] = {Enum.KeyCode.Space;Enum.KeyCode.ButtonA};
-	};
+	};	
 	CamOffsets ={
 		["Gun"] = "gun";
 		["Launcher"] = "gun";
 	};	
-	CamSpringDefaults = {
-		0.45; -- Damping
-		35; -- Frequency
-	};
-
 }
 
 ClientSettings.AnimAPI = require(script.AnimAPI)
@@ -376,5 +449,4 @@ ClientSettings.getTotalCamOffset = function(props)
 	}
 	return getTotalCamOffset
 end
-
 return ClientSettings
