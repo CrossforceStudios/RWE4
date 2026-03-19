@@ -41,3 +41,9 @@ This plugin is not a standalone game.
 It is a **tooling and runtime framework** built from Rodblogan Warfare’s original systems, designed to be reconfigured into new shooter experiences across different genres.
 
 ---
+
+## 📄 License
+
+This project is licensed under the MIT License.
+See the [LICENSE](LICENSE) file for full details.
+---
